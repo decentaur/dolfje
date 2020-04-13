@@ -1,0 +1,36 @@
+{
+  "name": "mnotwwbot",
+  "version": "1.0.0",
+  "description": "MNOT weerwolven bot",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/n/a.git"
+  },
+  "keywords": [
+    "mnot",
+    "ww",
+    "weerwolven",
+    "slack",
+    "bot"
+  ],
+  "author": "foaly",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/n/a/issues"
+  },
+  "homepage": "https://github.com/n/a#readme",
+  "dependencies": {
+    "@slack/bolt": "1.6.0",
+    "@slack/client": "5.0.2",
+    "@slack/events-api": "2.3.1",
+    "@slack/interactive-messages": "1.4.1",
+    "dotenv": "8.2.0",
+    "localizify": "^2.0.0",
+    "moment": "^2.24.0",
+    "mysql2": "^2.1.0"
+  }
+}
