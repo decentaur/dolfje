@@ -225,7 +225,7 @@ async function startStemRonde({ command, ack, say }) {
       return;
     }
     const channelUsersList = await helpers.getUserlist(client, command.channel_id);
-    await queries.startPoll(command.text);
+    await queries.startPoll(command.text || ' ');
     const playersAlive = await queries.getAlive();
     const channelUsersAlive = channelUsersList.filter((x) => playersAlive.map((y) => y.user_id).includes(x.id));
 
@@ -239,7 +239,7 @@ async function startStemRonde({ command, ack, say }) {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: command.text,
+          text: command.text || ' ',
         },
       },
     ];
