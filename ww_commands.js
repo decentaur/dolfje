@@ -36,7 +36,7 @@ async function channelList({ command, ack, say }) {
   try {
     const channelUsersList = await helpers.getUserlist(client, command.channel_id);
     let seperator = ', ';
-    if (command.text === 'newline') {
+    if (command.text.trim() === 'newline') {
       seperator = '\n';
     }
     returnText = `*${t('TEXTLIVING')}* (${
@@ -55,7 +55,7 @@ async function channelList({ command, ack, say }) {
       .filter((x) => !x.status)
       .map((x) => x.name)
       .join(seperator)}`;
-    if (command.text === 'public') {
+    if (command.text.trim() === 'public') {
       say({
         blocks: [
           {
@@ -98,7 +98,7 @@ async function status({ command, ack, say }) {
     } else {
       returnText = `${t('TEXTGAMESTOPPED')}`;
     }
-    if (command.text === 'public') {
+    if (command.text.trim() === 'public') {
       say({
         blocks: [
           {
@@ -135,7 +135,7 @@ async function regels({ command, ack, say }) {
       };
     }
 
-    if (command.text === 'public') {
+    if (command.text.trim() === 'public') {
       say(`${regels.gru_name}:\n${regels.gru_rules}`);
     } else {
       await client.chat.postEphemeral({
@@ -154,7 +154,7 @@ async function regels({ command, ack, say }) {
 async function archiveren({ command, ack, say }) {
   ack();
   try {
-    params = command.text.split(' ');
+    params = command.text.trim().split(' ');
     if (params.length < 1) {
       const warning = `${t('TEXTONEPARAMETERNEEDED')} ${t('COMMANDARCHIVE')} [${t('TEXTPASSWORD')}]`;
       await helpers.sendIM(client, command.user_id, warning);
@@ -225,7 +225,7 @@ async function startStemRonde({ command, ack, say }) {
       return;
     }
     const channelUsersList = await helpers.getUserlist(client, command.channel_id);
-    await queries.startPoll(command.text || ' ');
+    await queries.startPoll(command.text.trim() || ' ');
     const playersAlive = await queries.getAlive();
     const channelUsersAlive = channelUsersList.filter((x) => playersAlive.map((y) => y.user_id).includes(x.id));
 
@@ -239,7 +239,7 @@ async function startStemRonde({ command, ack, say }) {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: command.text || ' ',
+          text: command.text.trim() || ' ',
         },
       },
     ];
@@ -338,7 +338,7 @@ async function stemHerinnering({ command, ack, say }) {
       return;
     }
     const playersNotVoted = await queries.getAliveNotVoted();
-    const message = `${t('TEXTNOTVOTEDTIME')} ${command.text} om te stemmen, stemmen is verplicht`;
+    const message = `${t('TEXTNOTVOTEDTIME')} ${command.text.trim()} om te stemmen, stemmen is verplicht`;
     for (const player of playersNotVoted) {
       await helpers.sendIM(client, player.user_id, message);
     }
@@ -431,7 +431,7 @@ async function startVluchtigeStemRonde({ command, ack, say }) {
 async function startRegistratie({ command, ack, say }) {
   ack();
   try {
-    params = command.text.split(' ');
+    params = command.text.trim().split(' ');
     if (params.length < 3) {
       const warning = `${t('TEXTTHREEPARAMETERSNEEDED')} ${t('COMMANDSTARTREGISTRATION')} [${t('TEXTPASSWORD')}] [${t(
         'TEXTVOTESTYLE'
@@ -480,7 +480,7 @@ async function startRegistratie({ command, ack, say }) {
 async function startSpel({ command, ack, say }) {
   ack();
   try {
-    params = command.text.split(' ');
+    params = command.text.trim().split(' ');
     if (params.length !== 2) {
       const warning = `${t('TEXTTWOPARAMETERS')} ${t('COMMANDSTARTGAME')} [${t('TEXTPLAYERAMOUNT')}] [${t(
         'TEXTNAMEMAINCHANNEL'
@@ -560,7 +560,7 @@ async function stopSpel({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-    params = command.text.split(' ');
+    params = command.text.trim().split(' ');
     if (params.length < 1) {
       const warning = `${t('TEXTNEEDPARAMETER')} ${t('COMMANDSTOPGAME')} [${t('TEXTPASSWORD')}]`;
       await helpers.sendIM(client, command.user_id, warning);
@@ -585,7 +585,7 @@ async function stopSpel({ command, ack, say }) {
 async function dood({ command, ack, say }) {
   ack();
   try {
-    const params = command.text.split(' ');
+    const params = command.text.trim().split(' ');
     if (!(await queries.isVerteller(command.user_id))) {
       const warning = `TEXTKILLPEOPLE`;
       await helpers.sendIM(client, command.user_id, warning);
@@ -620,7 +620,7 @@ async function dood({ command, ack, say }) {
 async function reanimeer({ command, ack, say }) {
   ack();
   try {
-    const params = command.text.split(' ');
+    const params = command.text.trim().split(' ');
     if (!(await queries.isVerteller(command.user_id))) {
       const warning = `${t('TEXTMODERATORREVIVE')}`;
       await helpers.sendIM(client, command.user_id, warning);
@@ -655,16 +655,14 @@ async function reanimeer({ command, ack, say }) {
 async function extraVerteller({ command, ack, say }) {
   ack();
   try {
-    const params = command.text.split(' ');
+    const params = command.text.trim().split(' ');
     if (!(await queries.isVerteller(command.user_id))) {
       const warning = `${t('TEXTONLYMODSCANMAKEMODS')}`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
     if (params.length !== 1) {
-      const warning = `${t('COMMANDEXTRAMODERATOR')} ${t('TEXTTWOPARAMETERSNEEDED')} [@${t('TEXTUSER')}] [#${t(
-        'TEXTCHANNEL'
-      )}]`;
+      const warning = `${t('COMMANDEXTRAMODERATOR')} ${t('TEXTONEPARAMETER')} [@${t('TEXTUSER')}]`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
@@ -706,7 +704,7 @@ async function nodigVertellersUit({ command, ack, say }) {
 
 async function nodigSpelersUit({ command, ack, say }) {
   ack();
-  params = command.text.split(' ');
+  params = command.text.trim().split(' ');
   try {
     if (params[0] !== 'ikweethetzeker') {
       const warning = `${t('TEXTBESURE')}`;
@@ -807,7 +805,7 @@ async function verdeelRollen({ command, ack, say }) {
     const playersAlive = await queries.getAlive();
     helpers.shuffle(playersAlive);
     let playerIndex = 0;
-    const params = command.text.split(' ');
+    const params = command.text.trim().split(' ');
     for (const rol of params) {
       const rolNaam = rol.split(':')[0];
       const aantal = rol.split(':')[1];
