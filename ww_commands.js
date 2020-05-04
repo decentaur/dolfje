@@ -24,6 +24,7 @@ function addCommands(app) {
   app.command(t('COMMANDINVITEMODERATOR'), nodigVertellersUit);
   app.command(t('COMMANDINVITEPLAYERS'), nodigSpelersUit);
   app.command(t('COMMANDIWILLJOIN'), ikDoeMee);
+  app.command(t('COMMANDIWILLVIEW'), ikKijkMee);
   app.command(t('COMMANDREMOVEYOURSELFFROMGAME'), ikDoeNietMeerMee);
   app.command(t('COMMANDGIVEROLES'), verdeelRollen);
   app.command(t('COMMANDLOTTO'), lotto);
@@ -481,10 +482,9 @@ async function startSpel({ command, ack, say }) {
   ack();
   try {
     params = command.text.trim().split(' ');
-    if (params.length !== 2) {
+    if (params.length !== 3) {
       const warning = `${t('TEXTTWOPARAMETERS')} ${t('COMMANDSTARTGAME')} [${t('TEXTPLAYERAMOUNT')}] [${t(
-        'TEXTNAMEMAINCHANNEL'
-      )}] `;
+        'TEXTNAMEMAINCHANNEL')}] [${t('TEXTNAMEVIEWERCHANNEl')}]`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
@@ -501,7 +501,7 @@ async function startSpel({ command, ack, say }) {
     const game = await queries.getActiveGame();
     const hiernamaals = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
-      name: `${t('TEXTAFTERLIFE')}_${game.gms_name.toLowerCase().split(' ').join('_')}`,
+      name: `${t('TEXTNAMEVIEWERCHANNEL')}_${game.gms_name.toLowerCase().split(' ').join('_')}`,
       is_private: true,
     });
     const stemhok = await client.conversations.create({
@@ -525,7 +525,7 @@ async function startSpel({ command, ack, say }) {
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: hiernamaals.channel.id,
-        users: command.user_id,
+        users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
       });
 
       const uitgeloot = `${t('TEXTNOTINGAME')}`;
@@ -756,6 +756,37 @@ async function ikDoeMee({ command, ack, say }) {
     }
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLJOIN')}: ${error}`);
+  }
+}
+
+async function ikKijkMee({ command, ack, say }) {
+  ack();
+  try {
+    const userName = await helpers.getUserName(client, command.user_id);
+    const result = await queries.viewGame(command.user_id, userName);
+    if (result.succes) {
+      say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `${userName} ${t('TEXTVIEWED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')}`,
+            },
+          },
+        ],
+      });
+      const doeMeeMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
+      await helpers.sendIM(client, command.user_id, doeMeeMessage);
+    } else {
+      await helpers.sendIM(
+        client,
+        command.user_id,
+        `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLVIEW')}: ${result.error}`
+      );
+    }
+  } catch (error) {
+    await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLVIEW')}: ${error}`);
   }
 }
 
