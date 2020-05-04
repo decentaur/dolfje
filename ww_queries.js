@@ -214,8 +214,7 @@ async function viewGame(userId, userName) {
         `update game_players set gpl_status = ?
             where gpl_gms_id =? 
             and gpl_slack_id = ?
-            and gpl_name = ? gpl_status, gpl_leader, gpl_drawn,  gpl_number_of_messages)
-          values (?,?,?,?,?,?,?)`,
+            and gpl_name = ?`,
         [playerStates.kijker, game.gms_id, userId, userName]
       );
   
