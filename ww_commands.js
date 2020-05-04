@@ -501,7 +501,7 @@ async function startSpel({ command, ack, say }) {
     const game = await queries.getActiveGame();
     const hiernamaals = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
-      name: `${t('TEXTNAMEVIEWERCHANNEL')}_${game.gms_name.toLowerCase().split(' ').join('_')}`,
+      name: params[2].toLowerCase(),
       is_private: true,
     });
     const stemhok = await client.conversations.create({
