@@ -123,10 +123,11 @@ async function startGame(maxPlayers) {
        or gpl_leader)`,
       [game.gms_id]
     );
-    const [rows2] = await promisePool.query(
+    const queryResult = await promisePool.query(
       'select gpl_slack_id from game_player gpl where gpl_gms_id = ? and (gpl_status = ? or gpl_leader)',
         [game.gms_id, playerStates.kijker]
     );
+    Const rows2 = queryResult.rows
 
     return { succes: true, playerList: rows, viewerList: rows2 };
   } catch (err) {
