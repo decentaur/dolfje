@@ -98,7 +98,13 @@
   "TEXTALLINVITED": "All players are invited",
   "TEXTJOINED": "participates, there are currently ",
   "TEXTAMOUNTJOINED": "registrations",
-  "TEXTJOINEDGAME": "You have joined the next game. If you do not want to join anymore then you can leave by typing",
+  "TEXTJOINEDGAME": "Hi!
+  Nice to see that you joined this game! Once the enrollment is closed you will find out if you are selected to join the game and what your role is.
+  What can you expect from this game? You can be sure that it will take up quite some time on a daily basis.There is a ton of messages being send back and forth and you have to cast your daily vote. 
+  Should you have a special role (seer or wolf), you will probably spend more time on the game. You decide how much time to spend, but count on a minimum of 30 minutes a daY.
+  Don't think that you have enough time to play you can still decline by typing: /wwikdoenietmeermee.
+  Make sure you do this before the game commences as not to let down your fellow players. To discourage inactive players there is a mysterious disease. Those who missed the vote twice (before 20:00hrs) will die and be eliminated from the game. The special roles cast a secondary vote between 20:00 hrs and 22:00 hrs.
+  Still up to play the game? Great, so are we, let's wait and see whether you have been selected to join the game.",
   "TEXTNOTINGAMEANUMORE": "is not participating anymore. There are currently",
   "TEXTPLAYERNOTINGAME": "You are not participating in the next game. If you want to join the next game use",
   "TEXTONLYMODERATORROLES": "Only a moderator can give rolesn",
