@@ -482,9 +482,10 @@ async function startSpel({ command, ack, say }) {
   ack();
   try {
     params = command.text.trim().split(' ');
-    if (params.length !== 3) {
+    if (params.length !== 2) {
       const warning = `${t('TEXTTWOPARAMETERS')} ${t('COMMANDSTARTGAME')} [${t('TEXTPLAYERAMOUNT')}] [${t(
-        'TEXTNAMEMAINCHANNEL')}] [${t('TEXTNAMEVIEWERCHANNEl')}]`;
+        'TEXTNAMEMAINCHANNEL'
+      )}]`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
@@ -501,7 +502,7 @@ async function startSpel({ command, ack, say }) {
     const game = await queries.getActiveGame();
     const hiernamaals = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
-      name: params[2].toLowerCase(),
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_sectators`,
       is_private: true,
     });
     const stemhok = await client.conversations.create({
@@ -521,6 +522,16 @@ async function startSpel({ command, ack, say }) {
         token: process.env.SLACK_BOT_TOKEN,
         channel: stemhok.channel.id,
         users: result.playerList.map((x) => x.gpl_slack_id).join(','),
+      });
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: hoofdkanaal.channel.id,
+        users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
+      });
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: stemhok.channel.id,
+        users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
       });
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
@@ -711,7 +722,7 @@ async function nodigSpelersUit({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-    const spelers = await queries.getPlayers();
+    const spelers = await queries.getEveryOne();
     const channelUsersList = await helpers.getUserlist(client, command.channel_id);
     const uitTeNodigen = spelers.filter((x) => !channelUsersList.map((y) => y.id).includes(x.user_id));
     if (!uitTeNodigen.length) {

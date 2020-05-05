@@ -19,14 +19,14 @@ module.exports = {
   setMessageIdPoll,
   killUser,
   reanimateUser,
-  getPlayers,
+  getEveryOne,
   getAlive,
   getAliveNotVoted,
   getActiveGame,
   getNotDrawnPlayers,
   votesOn,
   getRules,
-  messageCountPlusPlus
+  messageCountPlusPlus,
 };
 
 const pool = mysql.createPool({
@@ -34,26 +34,26 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
-  database: process.env.DB_DATABASE
+  database: process.env.DB_DATABASE,
 });
 const promisePool = pool.promise();
 
 const gameStates = {
   registering: 'REGISTERING',
   ended: 'ENDED',
-  started: 'STARTED'
+  started: 'STARTED',
 };
 
 const playerStates = {
   alive: 'ALIVE',
   dead: 'DEAD',
   verteller: 'VERTELLER',
-  kijker: 'KIJKER'
+  kijker: 'KIJKER',
 };
 
 const pollStates = {
   open: 'OPEN',
-  closed: 'CLOSED'
+  closed: 'CLOSED',
 };
 
 async function createNewGame(voteStyle, gameName, userId, userName) {
@@ -94,11 +94,11 @@ async function startGame(maxPlayers) {
                 from game_players gpl
                 where gpl_gms_id = ?
                 and !gpl.gpl_leader
-                and !gpl.gpl_status = 'KIJKER') reg_game
+                and gpl.gpl_status <> ?) reg_game
             on reg_game.gpl_slack_id = gpl.gpl_slack_id
             where !gpl.gpl_drawn  
             and !gpl.gpl_leader
-            and !gpl.gpl_status = 'KIJKER'
+            and gpl.gpl_status <> ?
             and not exists (select 'played game'
             				from game_players gp2 
             				where gp2.gpl_slack_id = gpl.gpl_slack_id 
@@ -107,7 +107,7 @@ async function startGame(maxPlayers) {
             group by 1,2
             order by 3 desc, 4 desc, rand()
             limit ?) prefDraw)`,
-      [game.gms_id, maxPlayers * 1]
+      [game.gms_id, playerStates.kijker, playerStates.kijker, maxPlayers * 1]
     );
     await promisePool.query(
       `update games
@@ -119,15 +119,15 @@ async function startGame(maxPlayers) {
       `select gpl_slack_id
        from game_players gpl
        where gpl_gms_id = ?
-       and (gpl_drawn
-       or gpl_leader)`,
+       and gpl_drawn`,
       [game.gms_id]
     );
-    const queryResult = await promisePool.query(
-      'select gpl_slack_id from game_player gpl where gpl_gms_id = ? and (gpl_status = ? or gpl_leader)',
-        [game.gms_id, playerStates.kijker]
+    const [
+      rows2,
+    ] = await promisePool.query(
+      'select gpl_slack_id from game_players gpl where gpl_gms_id = ? and (gpl_status = ? or gpl_leader)',
+      [game.gms_id, playerStates.kijker]
     );
-    Const rows2 = queryResult.rows
 
     return { succes: true, playerList: rows, viewerList: rows2 };
   } catch (err) {
@@ -159,24 +159,23 @@ async function joinGame(userId, userName) {
     const gameHasViewer = await getGameHasViewer(game.gms_id, userId);
     if (gameHasPlayer) {
       return { succes: false, error: 'je bent al ingeschreven' };
-    } 
+    }
     if (gameHasViewer) {
       await promisePool.query(
-        `update game_players set gpl_status = ?
+        `update game_players 
+            set gpl_status = ?
             where gpl_gms_id =? 
-            and gpl_slack_id = ?
-            and gpl_name = ? gpl_status, gpl_leader, gpl_drawn,  gpl_number_of_messages)
-          values (?,?,?,?,?,?,?)`,
-        [playerStates.alive, game.gms_id, userId, userName]
+            and gpl_slack_id = ?`,
+        [playerStates.alive, game.gms_id, userId]
       );
-  
+
       let [rows] = await promisePool.query(
         `select count(1) numberOfPlayers
          from  game_players
          where gpl_gms_id = ?
          and not gpl_leader
          and not gpl_status = ?`,
-        [game.gms_id,playerStates.kijker]
+        [game.gms_id, playerStates.kijker]
       );
       return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
     }
@@ -193,7 +192,7 @@ async function joinGame(userId, userName) {
        where gpl_gms_id = ?
        and not gpl_leader
        and not gpl_status = ?`,
-      [game.gms_id,playerStates.kijker]
+      [game.gms_id, playerStates.kijker]
     );
     return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
   } catch (err) {
@@ -208,28 +207,28 @@ async function viewGame(userId, userName) {
     const gameHasViewer = await getGameHasViewer(game.gms_id, userId);
     const gameHasPlayer = await getGameHasPlayer(game.gms_id, userId);
     if (gameHasViewer) {
-          return { succes: false, error: 'je bent al ingeschreven als kijker'}
+      return { succes: false, error: 'je bent al ingeschreven als kijker' };
     }
     if (gameHasPlayer) {
       await promisePool.query(
-        `update game_players set gpl_status = ?
+        `update game_players 
+            set gpl_status = ?
             where gpl_gms_id =? 
-            and gpl_slack_id = ?
-            and gpl_name = ?`,
-        [playerStates.kijker, game.gms_id, userId, userName]
+            and gpl_slack_id = ?`,
+        [playerStates.kijker, game.gms_id, userId]
       );
-  
+
       let [rows] = await promisePool.query(
         `select count(1) numberOfPlayers
          from  game_players
          where gpl_gms_id = ?
          and not gpl_leader
          and not gpl_status = ?`,
-        [game.gms_id,playerStates.kijker]
+        [game.gms_id, playerStates.kijker]
       );
       return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
-      }
-        
+    }
+
     await promisePool.query(
       `insert into game_players
           (gpl_gms_id, gpl_slack_id, gpl_name, gpl_status, gpl_leader, gpl_drawn,  gpl_number_of_messages)
@@ -252,12 +251,13 @@ async function viewGame(userId, userName) {
   }
 }
 
-
 async function leaveGame(userId) {
   try {
     const game = await getGame(gameStates.registering);
     const gameHasPlayer = await getGameHasPlayer(game.gms_id, userId);
-    if (!gameHasPlayer) {
+    const gameHasViewer = await getGameHasViewer(game.gms_id, userId);
+
+    if (!gameHasPlayer && !gameHasViewer) {
       return { succes: false, error: 'je bent niet ingeschreven' };
     }
     await promisePool.query(
@@ -271,8 +271,9 @@ async function leaveGame(userId) {
       `select count(1) numberOfPlayers
        from  game_players
        where gpl_gms_id = ?
+       and gpl_status = ?
        and not gpl_leader`,
-      [game.gms_id]
+      [game.gms_id, playerStates.alive]
     );
     return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
   } catch (err) {
@@ -322,7 +323,7 @@ async function getVertellers() {
       and gpl_leader`,
     [game.gms_id]
   );
-  return rows.map(x => x.gpl_slack_id);
+  return rows.map((x) => x.gpl_slack_id);
 }
 
 async function addVerteller(userId, userName) {
@@ -463,17 +464,14 @@ async function reanimateUser(userId) {
   return rows;
 }
 
-async function getPlayers() {
+async function getEveryOne() {
   const game = await getGame(gameStates.started);
   const [rows] = await promisePool.query(
     `select gpl_slack_id user_id
          , gpl_name name
       from game_players
-      where gpl_gms_id = ?
-      and gpl_leader = false
-      and not gpl_status = ? 
-      and gpl_drawn`,
-    [game.gms_id,playerStates.kijker]
+      where gpl_gms_id = ?`,
+    [game.gms_id]
   );
   return rows;
 }
@@ -626,8 +624,9 @@ async function getNotDrawnPlayers() {
     `select * 
       from game_players
       where gpl_gms_id = ?
-      and !gpl_drawn`,
-    [game.gms_id]
+      and !gpl_drawn
+      and gpl_status = ?`,
+    [game.gms_id, playerStates.alive]
   );
   return rows;
 }
