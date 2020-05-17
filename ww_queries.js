@@ -48,7 +48,7 @@ const playerStates = {
   alive: 'ALIVE',
   dead: 'DEAD',
   verteller: 'VERTELLER',
-  kijker: 'KIJKER'
+  viewer: 'VIEWER'
 };
 
 const pollStates = {
@@ -94,11 +94,11 @@ async function startGame(maxPlayers) {
                 from game_players gpl
                 where gpl_gms_id = ?
                 and !gpl.gpl_leader
-                and !gpl.gpl_status = 'KIJKER') reg_game
+                and !gpl.gpl_status = 'VIEWER') reg_game
             on reg_game.gpl_slack_id = gpl.gpl_slack_id
             where !gpl.gpl_drawn  
             and !gpl.gpl_leader
-            and !gpl.gpl_status = 'KIJKER'
+            and !gpl.gpl_status = 'VIEWER'
             and not exists (select 'played game'
             				from game_players gp2 
             				where gp2.gpl_slack_id = gpl.gpl_slack_id 
@@ -123,11 +123,11 @@ async function startGame(maxPlayers) {
        or gpl_leader)`,
       [game.gms_id]
     );
-    const queryResult = await promisePool.query(
+    const [rows2,] = await promisePool.query(
       'select gpl_slack_id from game_player gpl where gpl_gms_id = ? and (gpl_status = ? or gpl_leader)',
-        [game.gms_id, playerStates.kijker]
+        [game.gms_id, playerStates.viewer]
     );
-    Const rows2 = queryResult.rows
+  
 
     return { succes: true, playerList: rows, viewerList: rows2 };
   } catch (err) {
@@ -171,14 +171,14 @@ async function joinGame(userId, userName) {
       );
   
       let [rows] = await promisePool.query(
-        `select count(1) numberOfPlayers
-         from  game_players
-         where gpl_gms_id = ?
-         and not gpl_leader
-         and not gpl_status = ?`,
-        [game.gms_id,playerStates.kijker]
+        `select
+        sum(case when gpl_status in ('DEAD', 'ALIVE') then 1 else 0 end) numberOfPlayers,
+        sum(case when gpl_status in ('VIEWER') then 1 else 0 end) numberOfViewers
+        from game_players
+        where gpl_gms_id = ?`,
+      [game.gms_id]
       );
-      return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
+      return { succes: true, numberOfPlayers: rows[0].numberOfPlayers, numberOfViewers: rows[0].numberOfViewers };
     }
     await promisePool.query(
       `insert into game_players
@@ -188,14 +188,14 @@ async function joinGame(userId, userName) {
     );
 
     let [rows] = await promisePool.query(
-      `select count(1) numberOfPlayers
-       from  game_players
-       where gpl_gms_id = ?
-       and not gpl_leader
-       and not gpl_status = ?`,
-      [game.gms_id,playerStates.kijker]
+      `select
+        sum(case when gpl_status in ('DEAD', 'ALIVE') then 1 else 0 end) numberOfPlayers,
+        sum(case when gpl_status in ('VIEWER') then 1 else 0 end) numberOfViewers
+        from game_players
+        where gpl_gms_id = ?`,
+      [game.gms_id]
     );
-    return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
+    return { succes: true, numberOfPlayers: rows[0].numberOfPlayers, numberOfViewers: rows[0].numberOfViewers };
   } catch (err) {
     console.log(err);
     return { succes: false, error: err };
@@ -216,36 +216,36 @@ async function viewGame(userId, userName) {
             where gpl_gms_id =? 
             and gpl_slack_id = ?
             and gpl_name = ?`,
-        [playerStates.kijker, game.gms_id, userId, userName]
+        [playerStates.viewer, game.gms_id, userId, userName]
       );
   
       let [rows] = await promisePool.query(
-        `select count(1) numberOfPlayers
-         from  game_players
-         where gpl_gms_id = ?
-         and not gpl_leader
-         and not gpl_status = ?`,
-        [game.gms_id,playerStates.kijker]
+        `select 
+          sum(case when gpl_status in ('DEAD', 'ALIVE') then 1 else 0 end) numberOfPlayers,
+          sum(case when gpl_status in ('VIEWER') then 1 else 0 end) numberOfViewers
+          from game_players
+          where gpl_gms_id = ?`,
+        [game.gms_id]
       );
-      return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
+      return { succes: true, numberOfPlayers: rows[0].numberOfPlayers, numberOfViewers: rows[0].numberOfViewers };
       }
         
     await promisePool.query(
       `insert into game_players
-          (gpl_gms_id, gpl_slack_id, gpl_name, gpl_status, gpl_leader, gpl_drawn,  gpl_number_of_messages)
+        (gpl_gms_id, gpl_slack_id, gpl_name, gpl_status, gpl_leader, gpl_drawn,  gpl_number_of_messages)
         values (?,?,?,?,?,?,?)`,
-      [game.gms_id, userId, userName, playerStates.kijker, false, false, 0]
+      [game.gms_id, userId, userName, playerStates.viewer, false, false, 0]
     );
 
     let [rows] = await promisePool.query(
-      `select count(1) numberOfPlayers
-       from  game_players
-       where gpl_gms_id = ?
-       and not gpl_leader
-       and not gpl_status = ?`,
-      [game.gms_id, playerStates.kijker]
+      `select 
+        sum(case when gpl_status in ('DEAD', 'ALIVE') then 1 else 0 end) numberOfPlayers,
+        sum(case when gpl_status in ('VIEWER') then 1 else 0 end) numberOfViewers
+        from game_players
+        where gpl_gms_id = ?`,
+      [game.gms_id]
     );
-    return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
+    return { succes: true, numberOfPlayers: rows[0].numberOfPlayers, numberOfViewers: rows[0].numberOfViewers };
   } catch (err) {
     console.log(err);
     return { succes: false, error: err };
@@ -268,13 +268,14 @@ async function leaveGame(userId) {
     );
 
     let [rows] = await promisePool.query(
-      `select count(1) numberOfPlayers
-       from  game_players
-       where gpl_gms_id = ?
-       and not gpl_leader`,
+      `select 
+        sum(case when gpl_status in ('DEAD', 'ALIVE') then 1 else 0 end) numberOfPlayers,
+        sum(case when gpl_status in ('VIEWER') then 1 else 0 end) numberOfViewers
+        from game_players
+        where gpl_gms_id = ?`,
       [game.gms_id]
     );
-    return { succes: true, numberOfPlayers: rows[0].numberOfPlayers };
+    return { succes: true, numberOfPlayers: rows[0].numberOfPlayers, numberOfViewers: rows[0].numberOfViewers };
   } catch (err) {
     console.log(err);
     return { succes: false, error: err };
@@ -287,12 +288,12 @@ async function getGameState() {
           , gms_status 
           , sum(case when gpl_status in ('DEAD', 'ALIVE') then 1 else 0 end) players
           , sum(case when gpl_status in ('ALIVE') then 1 else 0 end) alive
-          , sum(case when gpl_status in ('KIJKER') then 1 else 0 end) kijker
+          , sum(case when gpl_status in ('VIEWER') then 1 else 0 end) viewers
           , sum(case when gpl_status in ('DEAD') then 1 else 0 end) dead
       from games
       left join game_players 
       on gms_id = gpl_gms_id
-      where gms_status <> 'ENDED'
+      where gms_status <> 'ENDED'f
       group by 1,2`
   );
   return rows;
@@ -473,7 +474,7 @@ async function getPlayers() {
       and gpl_leader = false
       and not gpl_status = ? 
       and gpl_drawn`,
-    [game.gms_id,playerStates.kijker]
+    [game.gms_id,playerStates.viewer]
   );
   return rows;
 }
@@ -639,7 +640,7 @@ async function getGameHasPlayer(gmsId, userId) {
       where gpl_gms_id = ?
       and gpl_slack_id = ?
       and not gpl_status = ?`,
-    [gmsId, userId, playerStates.kijker]
+    [gmsId, userId, playerStates.viewer]
   );
   return rows.length;
 }
@@ -651,7 +652,7 @@ async function getGameHasViewer(gmsId, userId) {
       where gpl_gms_id = ?
       and gpl_slack_id = ?
       and gpl_status = ?`,
-    [gmsId, userId, playerStates.kijker]
+    [gmsId, userId, playerStates.viewer]
   );
   return rows.length;
 }

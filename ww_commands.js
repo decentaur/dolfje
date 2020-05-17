@@ -18,6 +18,7 @@ function addCommands(app) {
   app.command(t('COMMANDSTARTREGISTRATION'), startRegistratie);
   app.command(t('COMMANDSTARTGAME'), startSpel);
   app.command(t('COMMANDSTOPGAME'), stopSpel);
+  app.command(t('COMMANDCREATECHANNEL'), createChannel);
   app.command(t('COMMANDDEAD'), dood);
   app.command(t('COMMANDREVIVE'), reanimeer);
   app.command(t('COMMANDEXTRAMODERATOR'), extraVerteller);
@@ -94,7 +95,7 @@ async function status({ command, ack, say }) {
           'TEXTDEADPLAYERS'
         )} `;
       } else {
-        returnText += `${t('TEXTOPENREGISTRATION')} ${t('COMMANDIWILLJOIN')} ${t('TEXTREGISTER')}: ${state[0].players}`;
+        returnText += `${t('TEXTOPENREGISTRATION')} ${t('COMMANDIWILLJOIN')} ${t('TEXTREGISTER')} ${state[0].players} ${t('TEXTVIEWING')} ${state[0].viewers} `;
       }
     } else {
       returnText = `${t('TEXTGAMESTOPPED')}`;
@@ -582,6 +583,33 @@ async function stopSpel({ command, ack, say }) {
   }
 }
 
+async function createChannel({ command, ack, say }) {
+  ack();
+  try {
+    params = command.text.trim().split(' ');
+    if (params.length !== 1) {
+      const warning = `${t('TEXTONEPARAMETERNEEDED')} ${t('COMMANDCREATECHANNEL')} [${t('TEXTNAMECHANNEL')}]`;
+      await helpers.sendIM(client, command.user_id, warning);
+      return;
+    }
+    const kanaal = await client.conversations.create({
+      token: process.env.SLACK_BOT_TOKEN,
+      name: params[1].toLowerCase(),
+      is_private: true,
+    });
+    
+    await nodigVertellersUit;
+
+    await client.conversations.invite({
+      token: process.env.SLACK_BOT_TOKEN,
+      channel: kanaal.channel.id,
+      users: userId,
+    });
+  } catch (error) {
+    await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDCREATECHANNEL')}: ${error}`);
+  }
+}
+
 async function dood({ command, ack, say }) {
   ack();
   try {
@@ -740,7 +768,7 @@ async function ikDoeMee({ command, ack, say }) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `${userName} ${t('TEXTJOINED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')}`,
+              text: `${userName} ${t('TEXTJOINED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')} ${t('TEXTAMOUNTVIEWING')} ${result.numberOfViewers}`,
             },
           },
         ],
@@ -771,7 +799,7 @@ async function ikKijkMee({ command, ack, say }) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `${userName} ${t('TEXTVIEWED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')}`,
+              text: `${userName} ${t('TEXTVIEWED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')} ${t('TEXTAMOUNTVIEWING')} ${result.numberOfViewers}`,
             },
           },
         ],
@@ -802,7 +830,7 @@ async function ikDoeNietMeerMee({ command, ack, say }) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `${userName} ${t('TEXTNOTINGAMEANUMORE')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')}`,
+              text: `${userName} ${t('TEXTNOTINGAMEANUMORE')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')} ${t('TEXTAMOUNTVIEWING')} ${result.numberOfViewers}`,
             },
           },
         ],
