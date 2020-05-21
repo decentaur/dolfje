@@ -492,7 +492,8 @@ async function startSpel({ command, ack, say }) {
     params = command.text.trim().split(' ');
     if (params.length !== 2) {
       const warning = `${t('TEXTTWOPARAMETERS')} ${t('COMMANDSTARTGAME')} [${t('TEXTPLAYERAMOUNT')}] [${t(
-        'TEXTNAMEMAINCHANNEL')}]`;
+        'TEXTNAMEMAINCHANNEL'
+      )}]`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
@@ -513,7 +514,7 @@ async function startSpel({ command, ack, say }) {
     console.log(game);
     const hiernamaals = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
-      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_1sectators`,
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_sectators`,
       is_private: true,
     });
     console.log('create stemhok');
@@ -554,6 +555,16 @@ async function startSpel({ command, ack, say }) {
         gch_created_at: new Date(Math.floor(Date.now()))
       };
       await queries.logChannel(stemhokInput);
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: hoofdkanaal.channel.id,
+        users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
+      });
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: stemhok.channel.id,
+        users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
+      });
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: hiernamaals.channel.id,
@@ -821,7 +832,7 @@ async function nodigSpelersUit({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-    const spelers = await queries.getPlayers();
+    const spelers = await queries.getEveryOne();
     const channelUsersList = await helpers.getUserlist(client, command.channel_id);
     const uitTeNodigen = spelers.filter((x) => !channelUsersList.map((y) => y.id).includes(x.user_id));
     if (!uitTeNodigen.length) {
