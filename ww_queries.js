@@ -16,6 +16,7 @@ module.exports = {
   getPollName,
   getPollResults,
   getCurrentPollResults,
+  getGameHasPlayer,
   setMessageIdPoll,
   killUser,
   reanimateUser,
@@ -110,7 +111,7 @@ async function startGame(maxPlayers) {
             group by 1,2
             order by 3 desc, 4 desc, rand()
             limit ?) prefDraw)`,
-      [game.gms_id, playerStates.kijker, playerStates.kijker, maxPlayers * 1]
+      [game.gms_id, playerStates.viewer, playerStates.viewer, maxPlayers * 1]
     );
     await promisePool.query(
       `update games
@@ -129,7 +130,7 @@ async function startGame(maxPlayers) {
       rows2,
     ] = await promisePool.query(
       'select gpl_slack_id from game_players gpl where gpl_gms_id = ? and (gpl_status = ? or gpl_leader)',
-      [game.gms_id, playerStates.kijker]
+      [game.gms_id, playerStates.viewer]
     );
 
     return { succes: true, playerList: rows, viewerList: rows2 };
@@ -217,7 +218,7 @@ async function viewGame(userId, userName, gameId) {
             set gpl_status = ?
             where gpl_gms_id =? 
             and gpl_slack_id = ?`,
-        [playerStates.viewer, game.gms_id, userId]
+        [playerStates.viewer, gameId, userId]
       );
 
       let [rows] = await promisePool.query(
@@ -683,15 +684,15 @@ async function logChannel(logInput) {
 
 async function getChannel(gameId, channelType) {
   const [rows] = await promisePool.query(
-    `select gch_slack_id from game_channels where gch_gms_id = ? and gch_type =?`,
+    `select gch_slack_id from game_channels where gch_gms_id = ? and gch_type = ?`,
     [gameId, channelType]
   );
-  return rows.length;
+  return rows[0];
 }
 
 async function getAllChannels(gameId) {
   const [ rows ] = await promisePool.query(
       `select gch_slack_id from game_channels where gch_gms_id = ?`, [gameId]
   ); 
-  return rows.length;
+  return rows;
 }
