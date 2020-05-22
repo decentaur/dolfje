@@ -54,7 +54,7 @@ CREATE TABLE `game_rules` (
   `gch_type` varchar(255),
   `gch_user_created` varchar(255),
   `gch_created_at` timestamp,
-  PRIMARY KEY ('gch_gms_id', 'gch_slack_id')
+  PRIMARY KEY (`gch_gms_id`, `gch_slack_id`)
 );
 
 ALTER TABLE `games` ADD FOREIGN KEY (`gms_gru_id`) REFERENCES `game_rules` (`gru_id`);
