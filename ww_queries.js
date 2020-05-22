@@ -27,10 +27,10 @@ module.exports = {
   getNotDrawnPlayers,
   votesOn,
   getRules,
-  logChannel, 
+  logChannel,
   getChannel,
   getAllChannels,
-  messageCountPlusPlus
+  messageCountPlusPlus,
 };
 
 const pool = mysql.createPool({
@@ -52,7 +52,7 @@ const playerStates = {
   alive: 'ALIVE',
   dead: 'DEAD',
   verteller: 'VERTELLER',
-  viewer: 'VIEWER'
+  viewer: 'VIEWER',
 };
 
 const pollStates = {
@@ -179,7 +179,7 @@ async function joinGame(userId, userName) {
         sum(case when gpl_status in ('VIEWER') then 1 else 0 end) numberOfViewers
         from game_players
         where gpl_gms_id = ?`,
-      [game.gms_id]
+        [game.gms_id]
       );
       return { succes: true, numberOfPlayers: rows[0].numberOfPlayers, numberOfViewers: rows[0].numberOfViewers };
     }
@@ -230,8 +230,8 @@ async function viewGame(userId, userName, gameId) {
         [gameId]
       );
       return { succes: true, numberOfPlayers: rows[0].numberOfPlayers, numberOfViewers: rows[0].numberOfViewers };
-      }
-        
+    }
+
     await promisePool.query(
       `insert into game_players
         (gpl_gms_id, gpl_slack_id, gpl_name, gpl_status, gpl_leader, gpl_drawn,  gpl_number_of_messages)
@@ -676,9 +676,10 @@ async function getPoll(gmsId) {
 async function logChannel(logInput) {
   await promisePool.query(
     `insert into game_channels
-      (gch_gms_id, gch_slack_id, gch_name, gch_type, gch_user_created, gch_created_at)
-        values(?,?,?,?,?,?)`,
-    [logInput.gch_id, logInput.gch_slack_id, logInput.gch_name, logInput.gch_type, logInput.gch_user_created, logInput.gch_created_at]
+      (gch_gms_id, gch_slack_id, gch_name, gch_type, gch_user_created)
+        values(?,?,?,?,?,?)
+        on duplicate key update gch_gms_id = gch_gms_id`,
+    [logInput.gch_gms_id, logInput.gch_slack_id, logInput.gch_name, logInput.gch_type, logInput.gch_user_created]
   );
 }
 
@@ -691,8 +692,6 @@ async function getChannel(gameId, channelType) {
 }
 
 async function getAllChannels(gameId) {
-  const [ rows ] = await promisePool.query(
-      `select gch_slack_id from game_channels where gch_gms_id = ?`, [gameId]
-  ); 
+  const [rows] = await promisePool.query(`select gch_slack_id from game_channels where gch_gms_id = ?`, [gameId]);
   return rows;
 }
