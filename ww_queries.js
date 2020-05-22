@@ -297,7 +297,7 @@ async function getGameState() {
       left join game_players 
       on gms_id = gpl_gms_id
       where gms_status <> 'ENDED'
-      group by 1,2`
+      group by 1,2,3`
   );
   return rows;
 }
