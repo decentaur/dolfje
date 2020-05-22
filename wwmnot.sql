@@ -47,6 +47,16 @@ CREATE TABLE `game_rules` (
   `gru_rules` text
 );
 
+ CREATE TABLE  `game_channels` (
+  `gch_gms_id` int, 
+  `gch_slack_id` varchar(255),
+  `gch_name` varchar(255),
+  `gch_type` varchar(50),
+  `gch_user_created` varchar(255),
+  `gch_created_at` TIMESTAMP,
+  PRIMARY KEY ('gch_gms_id', 'gch_slack_id')
+);
+
 ALTER TABLE `games` ADD FOREIGN KEY (`gms_gru_id`) REFERENCES `game_rules` (`gru_id`);
 
 ALTER TABLE `game_players` ADD FOREIGN KEY (`gpl_gms_id`) REFERENCES `games` (`gms_id`);
@@ -59,4 +69,4 @@ ALTER TABLE `game_votes` ADD FOREIGN KEY (`gvo_gpl_gms_id`, `gvo_gpl_slack_id`) 
 
 ALTER TABLE `game_votes` ADD FOREIGN KEY (`gvo_voted_on_gpl_gms_id`, `gvo_voted_on_gpl_slack_id`) REFERENCES `game_players` (`gpl_gms_id`, `gpl_slack_id`);
 
-
+ALTER TABLE `game_channels` ADD FOREIGN KEY (`gch_gms_id`) REFERENCES `games` (`gms_id`);

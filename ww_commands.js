@@ -4,6 +4,13 @@ const { t } = require('localizify');
 module.exports = { addCommands };
 let client;
 
+const channelType = {
+  main: 'MAIN',
+  vote: 'VOTE',
+  viewer: 'VIEWER',
+  standard: 'NORMAL'
+};
+
 function addCommands(app) {
   client = app.client;
   app.command(t('COMMANDLIST'), channelList);
@@ -18,6 +25,7 @@ function addCommands(app) {
   app.command(t('COMMANDSTARTREGISTRATION'), startRegistratie);
   app.command(t('COMMANDSTARTGAME'), startSpel);
   app.command(t('COMMANDSTOPGAME'), stopSpel);
+  app.command(t('COMMANDCREATECHANNEL'), createChannel);
   app.command(t('COMMANDDEAD'), dood);
   app.command(t('COMMANDREVIVE'), reanimeer);
   app.command(t('COMMANDEXTRAMODERATOR'), extraVerteller);
@@ -94,7 +102,7 @@ async function status({ command, ack, say }) {
           'TEXTDEADPLAYERS'
         )} `;
       } else {
-        returnText += `${t('TEXTOPENREGISTRATION')} ${t('COMMANDIWILLJOIN')} ${t('TEXTREGISTER')}: ${state[0].players}`;
+        returnText += `${t('TEXTOPENREGISTRATION')} ${t('COMMANDIWILLJOIN')} ${t('TEXTREGISTER')} ${state[0].players} ${t('TEXTVIEWING')} ${state[0].viewers} `;
       }
     } else {
       returnText = `${t('TEXTGAMESTOPPED')}`;
@@ -494,20 +502,23 @@ async function startSpel({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
+
     const hoofdkanaal = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
       name: params[1].toLowerCase(),
       is_private: true,
     });
     const game = await queries.getActiveGame();
+
     const hiernamaals = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
       name: `${game.gms_name.toLowerCase().split(' ').join('_')}_sectators`,
       is_private: true,
     });
+
     const stemhok = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
-      name: `${t('TEXTVOTEBOOTH')}_${game.gms_name.toLowerCase().split(' ').join('_')}`,
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTVOTEBOOTH')}`,
       is_private: true,
     });
 
@@ -518,11 +529,29 @@ async function startSpel({ command, ack, say }) {
         channel: hoofdkanaal.channel.id,
         users: result.playerList.map((x) => x.gpl_slack_id).join(','),
       });
+      const hoofdkanaalInput = {
+        gch_id: game.gms_id,
+        gch_slack_id: hoofdkanaal.channel.id,
+        gch_name: hoofdkanaal.channel.name,
+        gch_type: channelType.main,
+        gch_user_created: command.user_id,
+        gch_created_at: new Date(Math.floor(Date.now()))
+      };
+      await queries.logChannel(hoofdkanaalInput);
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: stemhok.channel.id,
         users: result.playerList.map((x) => x.gpl_slack_id).join(','),
       });
+      const stemhokInput = {
+        gch_id: game.gms_id,
+        gch_slack_id: stemhok.channel.id,
+        gch_name: stemhok.channel.name,
+        gch_type: channelType.vote,
+        gch_user_created: command.user_id,
+        gch_created_at: new Date(Math.floor(Date.now()))
+      };
+      await queries.logChannel(stemhokInput);
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: hoofdkanaal.channel.id,
@@ -538,6 +567,15 @@ async function startSpel({ command, ack, say }) {
         channel: hiernamaals.channel.id,
         users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
       });
+      const hiernamaalsInput = {
+        gch_id: game.gms_id,
+        gch_slack_id: hiernamaals.channel.id,
+        gch_name: hiernamaals.channel.name,
+        gch_type: channelType.viewer,
+        gch_user_created: command.user_id,
+        gch_created_at: new Date(Math.floor(Date.now()))
+      };
+      await queries.logChannel(hiernamaalsInput);
 
       const uitgeloot = `${t('TEXTNOTINGAME')}`;
       const uitgeloteSpelers = await queries.getNotDrawnPlayers();
@@ -591,6 +629,52 @@ async function stopSpel({ command, ack, say }) {
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDSTOPGAME')}: ${error}`);
   }
+}
+
+async function createChannel({ command, ack, say }) {
+  ack();
+  try {
+    params = command.text.trim().split(' ');
+    if (params.length !== 1) {
+      const warning = `${t('TEXTONEPARAMETERNEEDED')} ${t('COMMANDCREATECHANNEL')} [${t('TEXTNAMECHANNEL')}]`;
+      await helpers.sendIM(client, command.user_id, warning);
+      return;
+    }
+    const kanaal = await client.conversations.create({
+      token: process.env.SLACK_BOT_TOKEN,
+      name: params[0].toLowerCase(),
+      is_private: true,
+    });
+    console.log(kanaal.channel.id);
+    const alleVertellers = await queries.getVertellers();
+    for (const verteller of alleVertellers) {
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: kanaal.channel.id,
+        users: verteller
+      })
+    };
+    if (!alleVertellers.includes(command.user_id)) {
+    await client.conversations.invite({
+      token: process.env.SLACK_BOT_TOKEN,
+      channel: kanaal.channel.id,
+      users: command.user_id
+    })};
+
+    const gameId = await queries.getActiveGame();
+    const kanaalInput = {
+        gch_id: gameId.gms_id,
+        gch_slack_id: kanaal.channel.id,
+        gch_name: kanaal.channel.name,
+        gch_type: channelType.standard,
+        gch_user_created: command.user_id,
+        gch_created_at: new Date(Math.floor(Date.now()))
+      };
+    await queries.logChannel(kanaalInput);
+
+  } catch (error) {
+      await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDCREATECHANNEL')}: ${error}`);
+    	}
 }
 
 async function dood({ command, ack, say }) {
@@ -677,15 +761,44 @@ async function extraVerteller({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
+    const state = await queries.getGameState();
+    const userId = params[0].match(/^<@([A-Z0-9]*)(\|.*)?>/)[1];
+    const alivePlayers = await queries.getAlive();
+    console.log(alivePlayers, userId); 
+    if(alivePlayers.some( x => x.user_id === userId)) {
+      const warning = `${command.text} ${t('TEXTISPLAYER')}`;
+      await helpers.sendIM(client, command.user_id, warning);
+      return;
+    }
     if (/^<(@[A-Z0-9]*)(\|.*)?>/.test(params[0]) === false) {
       const warning = `${t('TEXTFIRSTPARAMETERSHOULD')} ${t('COMMANDEXTRAMODERATOR')} ${t('TEXTSHOULDBEA')}`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-
-    const userId = params[0].match(/^<@([A-Z0-9]*)(\|.*)?>/)[1];
     const userName = await helpers.getUserName(client, userId);
     await queries.addVerteller(userId, userName);
+    if (state[0].gms_status === 'STARTED') {
+        const allChannels = await queries.getAllChannels(state[0].gms_id)
+        for (const oneChannel of allChannels) {
+          await client.conversations.invite({
+            token: process.env.SLACK_BOT_TOKEN,
+            channel: oneChannel.gch_slack_id,
+            users: userId,
+          });
+        }
+      }
+    say({
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${command.text} ${t('TEXTISVERTELLER')}`,
+          },
+        },
+      ],
+    });
+
     const message = `${t('TEXTBECAMEMODERATOR')}`;
     await helpers.sendIM(client, userId, message);
   } catch (error) {
@@ -707,6 +820,17 @@ async function nodigVertellersUit({ command, ack, say }) {
         channel: command.channel_id,
         users: uitTeNodigen.join(','),
       });
+    const game = await queries.getActiveGame();
+    const kanaalInput = {
+      gch_id: game.gms_id,
+      gch_slack_id: command.channel_id,
+      gch_name: command.channel_name,
+      gch_type: channelType.standard,
+      gch_user_created: command.user_id,
+      gch_created_at: new Date(Math.floor(Date.now()))
+    };
+    await queries.logChannel(kanaalInput);
+      
     }
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDINVITEMODERATOR')}: ${error}`);
@@ -751,7 +875,7 @@ async function ikDoeMee({ command, ack, say }) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `${userName} ${t('TEXTJOINED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')}`,
+              text: `${userName} ${t('TEXTJOINED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')} ${t('TEXTAMOUNTVIEWING')} ${result.numberOfViewers}`,
             },
           },
         ],
@@ -774,21 +898,65 @@ async function ikKijkMee({ command, ack, say }) {
   ack();
   try {
     const userName = await helpers.getUserName(client, command.user_id);
-    const result = await queries.viewGame(command.user_id, userName);
+    const state = await queries.getGameState();
+    const result = await queries.viewGame(command.user_id, userName, state[0].gms_id);
     if (result.succes) {
-      say({
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `${userName} ${t('TEXTVIEWED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')}`,
+      if (state[0].gms_status === 'REGISTERING') {
+        say({
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `${userName} ${t('TEXTVIEWED')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')} ${t('TEXTAMOUNTVIEWING')} ${result.numberOfViewers}`,
+              },
             },
-          },
-        ],
-      });
-      const doeMeeMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
-      await helpers.sendIM(client, command.user_id, doeMeeMessage);
+          ],
+        });
+      } else if (state[0].gms_status === 'STARTED') {
+        say({
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `${t('TEXTVIEWERJOINED')} ${userName}`
+              }
+            }
+          ]
+        });
+        
+        //invite player to main channel
+        const mainId = await queries.getChannel(state[0].gms_id, channelType.main);
+        await client.conversations.invite({
+          token: process.env.SLACK_BOT_TOKEN,
+          channel: mainId.gch_slack_id,
+          users: command.user_id
+        });
+        //invite player to stemhok
+        const voteId = await queries.getChannel(state[0].gms_id, channelType.vote);
+        await client.conversations.invite({
+          token: process.env.SLACK_BOT_TOKEN,
+          channel: voteId.gch_slack_id,
+          users: command.user_id
+        });
+        //invite player to sectators
+        const sectatorId = await queries.getChannel(state[0].gms_id, channelType.viewer);
+        await client.conversations.invite({
+          token: process.env.SLACK_BOT_TOKEN,
+          channel: sectatorId.gch_slack_id,
+          users: command.user_id
+        });
+        //send IM to vertellers
+        const vertellerMessage  = `${t('TEXTVIEWERJOINED')} ${userName}`;
+        const alleVertellers = await queries.getVertellers();
+        for (let i=0; i<alleVertellers.length; i++ ) {
+          console.log(i, alleVertellers[0])
+          await helpers.sendIM(client, alleVertellers[i], vertellerMessage);
+          }
+      }
+      const viewMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
+      await helpers.sendIM(client, command.user_id, viewMessage);
     } else {
       await helpers.sendIM(
         client,
@@ -813,7 +981,7 @@ async function ikDoeNietMeerMee({ command, ack, say }) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `${userName} ${t('TEXTNOTINGAMEANUMORE')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')}`,
+              text: `${userName} ${t('TEXTNOTINGAMEANUMORE')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')} ${t('TEXTAMOUNTVIEWING')} ${result.numberOfViewers}`,
             },
           },
         ],
@@ -844,10 +1012,16 @@ async function verdeelRollen({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
+    const params = command.text.trim().split(' ');
+    if(!command.text.trim().endsWith(':')) {
+      const warning = `${t('TEXTNOCIVILIANS')}`;
+      await helpers.sendIM(client, command.user_id, warning);
+      return;
+    }
     const playersAlive = await queries.getAlive();
     helpers.shuffle(playersAlive);
     let playerIndex = 0;
-    const params = command.text.trim().split(' ');
+    
     for (const rol of params) {
       const rolNaam = rol.split(':')[0];
       const aantal = rol.split(':')[1];
