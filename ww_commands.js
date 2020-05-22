@@ -752,7 +752,6 @@ async function extraVerteller({ command, ack, say }) {
     const state = await queries.getGameState();
     const userId = params[0].match(/^<@([A-Z0-9]*)(\|.*)?>/)[1];
     const alivePlayers = await queries.getAlive();
-    console.log(alivePlayers, userId);
     if (alivePlayers.some((x) => x.user_id === userId)) {
       const warning = `${command.text} ${t('TEXTISPLAYER')}`;
       await helpers.sendIM(client, command.user_id, warning);
@@ -948,9 +947,8 @@ async function ikKijkMee({ command, ack, say }) {
         //send IM to vertellers
         const vertellerMessage = `${t('TEXTVIEWERJOINED')} ${userName}`;
         const alleVertellers = await queries.getVertellers();
-        for (let i = 0; i < alleVertellers.length; i++) {
-          console.log(i, alleVertellers[0]);
-          await helpers.sendIM(client, alleVertellers[i], vertellerMessage);
+        for (const verteller of alleVertellers) {
+          await helpers.sendIM(client, verteller, vertellerMessage);
         }
       }
       const viewMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
