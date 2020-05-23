@@ -161,6 +161,7 @@ async function joinGame(userId, userName) {
     const game = await getGame(gameStates.registering);
     const gameHasPlayer = await getGameHasPlayer(game.gms_id, userId);
     const gameHasViewer = await getGameHasViewer(game.gms_id, userId);
+
     if (gameHasPlayer) {
       return { succes: false, error: 'je bent al ingeschreven' };
     }
@@ -209,6 +210,10 @@ async function viewGame(userId, userName, gameId) {
   try {
     const gameHasViewer = await getGameHasViewer(gameId, userId);
     const gameHasPlayer = await getGameHasPlayer(gameId, userId);
+    const verteller = await isVerteller(userId);
+    if (verteller) {
+      return { succes: false, error: 'je bent de verteller' };
+    }
     if (gameHasViewer) {
       return { succes: false, error: 'je bent al ingeschreven als kijker' };
     }
@@ -640,7 +645,8 @@ async function getGameHasPlayer(gmsId, userId) {
       from game_players
       where gpl_gms_id = ?
       and gpl_slack_id = ?
-      and not gpl_status = ?`,
+      and not gpl_status = ?
+      and not gpl_leader`,
     [gmsId, userId, playerStates.viewer]
   );
   return rows.length;
@@ -677,7 +683,7 @@ async function logChannel(logInput) {
   await promisePool.query(
     `insert into game_channels
       (gch_gms_id, gch_slack_id, gch_name, gch_type, gch_user_created)
-        values(?,?,?,?,?,?)
+        values(?,?,?,?,?)
         on duplicate key update gch_gms_id = gch_gms_id`,
     [logInput.gch_gms_id, logInput.gch_slack_id, logInput.gch_name, logInput.gch_type, logInput.gch_user_created]
   );

@@ -102,9 +102,9 @@ async function status({ command, ack, say }) {
           'TEXTDEADPLAYERS'
         )} `;
       } else {
-        returnText += `${t('TEXTOPENREGISTRATION')} ${t('COMMANDIWILLJOIN')} ${t('TEXTREGISTER')} ${
-          state[0].players
-        } ${t('TEXTVIEWING')} ${state[0].viewers} `;
+        returnText += `${t('TEXTOPENREGISTRATION')} ${t('COMMANDIWILLJOIN')} ${t('TEXTVIEW')} ${t(
+          'COMMANDIWILLVIEW'
+        )} ${t('TEXTREGISTER')} ${state[0].players} ${t('TEXTVIEWING')} ${state[0].viewers} `;
       }
     } else {
       returnText = `${t('TEXTGAMESTOPPED')}`;
@@ -469,9 +469,9 @@ async function startRegistratie({ command, ack, say }) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `${t('TEXTREGISTRATIONSGAME')} (${result.gameName}) ${t('TEXTAREOPENED')} ${t(
+              text: `${t('TEXTREGISTRATIONSGAME')} (${result.gameName}) ${t('TEXTOPENREGISTRATION')} ${t(
                 'COMMANDIWILLJOIN'
-              )} ${t('TEXTSUBSCRIBE')}`,
+              )} ${t('TEXTVIEW')} ${t('COMMANDIWILLVIEW')} `,
             },
           },
         ],
@@ -643,14 +643,16 @@ async function createChannel({ command, ack, say }) {
     if (!alleVertellers.includes(command.user_id)) {
       alleVertellers.push(command.user_id);
     }
-
     const kanaal = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
       name: params[0].toLowerCase(),
       is_private: true,
-      user_ids: alleVertellers.join(','),
     });
-
+    await client.conversations.invite({
+      token: process.env.SLACK_BOT_TOKEN,
+      channel: kanaal.channel.id,
+      users: alleVertellers.join(','),
+    });
     const gameId = await queries.getActiveGame();
     const kanaalInput = {
       gch_gms_id: gameId.gms_id,
@@ -820,9 +822,9 @@ async function nodigVertellersUit({ command, ack, say }) {
     const kanaalInput = {
       gch_gms_id: game.gms_id,
       gch_slack_id: command.channel_id,
-      gch_name: channel.name,
+      gch_name: channel.channel.name,
       gch_type: channelType.standard,
-      gch_user_created: channel.creator,
+      gch_user_created: channel.channel.creator,
     };
     await queries.logChannel(kanaalInput);
   } catch (error) {
@@ -895,8 +897,10 @@ async function ikKijkMee({ command, ack, say }) {
     const userName = await helpers.getUserName(client, command.user_id);
     const state = await queries.getGameState();
     const result = await queries.viewGame(command.user_id, userName, state[0].gms_id);
+    let viewMessage;
     if (result.succes) {
       if (state[0].gms_status === 'REGISTERING') {
+        viewMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
         say({
           blocks: [
             {
@@ -911,6 +915,7 @@ async function ikKijkMee({ command, ack, say }) {
           ],
         });
       } else if (state[0].gms_status === 'STARTED') {
+        viewMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
         say({
           blocks: [
             {
@@ -951,7 +956,6 @@ async function ikKijkMee({ command, ack, say }) {
           await helpers.sendIM(client, verteller, vertellerMessage);
         }
       }
-      const viewMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
       await helpers.sendIM(client, command.user_id, viewMessage);
     } else {
       await helpers.sendIM(
