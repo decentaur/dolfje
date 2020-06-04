@@ -32,9 +32,10 @@ async function startStemming({ message, say }) {
     return;
   }
   try {
+    const game = await queries.getActiveGameWithChannel(message.channel.id);
     const channelUsersList = await helpers.getUserlist(client, message.channel);
-    const pollName = await queries.getPollName();
-    const playersAlive = await queries.getAlive();
+    const pollName = await queries.getPollName(game.gms_id);
+    const playersAlive = await queries.getAlive(game.gms_id);
     const channelUsersAlive = channelUsersList.filter(x => playersAlive.map(y => y.user_id).includes(x.id));
     if (!channelUsersAlive) {
       throw 'Er zijn geen spelers waarop gestemd kan worden, poll is niet gestart';
@@ -87,11 +88,12 @@ async function stopStemming({ message, say }) {
     return;
   }
   try {
+    const game = await queries.getActiveGameWithChannel(message.channel.id);
     const channelUsersList = await helpers.getUserlist(client, message.channel);
-    const playersAlive = await queries.getAlive();
+    const playersAlive = await queries.getAlive(game.gms_id);
     const channelUsersAlive = channelUsersList.filter(x => playersAlive.map(y => y.user_id).includes(x.id));
 
-    const poll = await queries.stopPoll();
+    const poll = await queries.stopPoll(game.gms_id);
     const pollResults = await queries.getPollResults(poll);
     if (!poll.gpo_slack_message_id.split) {
       throw 'Resultaten konden niet weergegeven worden, poll is wel gesloten';
@@ -146,8 +148,9 @@ async function herinnerStemmers({ message, say }) {
     return;
   }
   try {
+    const game = await queries.getActiveGameWithChannel(message.channel.id);
     const time = message.text.match(/.*herinner.*\[(.*)\].*/)[1];
-    const playersNotVoted = await queries.getAliveNotVoted();
+    const playersNotVoted = await queries.getAliveNotVoted(game.gms_id);
     const stemMessage = `Je hebt nog niet gestemd, je hebt tot ${time} om te stemmen, stemmen is verplicht`;
     for (const player of playersNotVoted) {
       await helpers.sendIM(client, player.user_id, stemMessage);

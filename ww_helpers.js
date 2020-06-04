@@ -1,4 +1,11 @@
-module.exports = { getUserlist, getUserName, sendIM, shuffle, postDelayed, addSlackName };
+module.exports = { 
+  getUserlist, 
+  getUserName, 
+  sendIM, 
+  shuffle,
+  postDelayed,
+  addSlackName
+};
 
 async function getUserlist(client, channelId) {
   const channelUsersList = [];
