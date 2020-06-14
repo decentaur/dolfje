@@ -144,7 +144,7 @@ async function startGame(gameId, maxPlayers) {
       [gameId, playerStates.viewer]
     );
     await promisePool.query(
-      `DELETE FROM game_players gpl
+      `DELETE gpl.* FROM game_players gpl
       JOIN games g ON g.gms_id = gpl.gpl_gms_id
       JOIN (SELECT gpl_slack_id, gpl_gms_id
           FROM game_players gpl
