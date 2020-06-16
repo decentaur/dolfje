@@ -140,7 +140,9 @@ async function startGame(gameId, maxPlayers) {
     const [
       rows2,
     ] = await promisePool.query(
-      'select gpl_slack_id from game_players gpl where gpl_gms_id = ? and (gpl_status = ? or gpl_leader)',
+      `select gpl_slack_id from game_players gpl 
+      where gpl_gms_id = ? 
+      and (gpl_status = ? or gpl_leader)`,
       [gameId, playerStates.viewer]
     );
     await promisePool.query(
@@ -158,7 +160,6 @@ async function startGame(gameId, maxPlayers) {
       AND gpl.gpl_status = ?`,
       [gameId, gameStates.registering, playerStates.alive]
     )
-
     return { succes: true, playerList: rows, viewerList: rows2 };
   } catch (err) {
     console.log(err);
@@ -186,7 +187,7 @@ async function joinGame(gameId, userId, userName) {
     const gameHasPlayer = await getGameHasPlayer(gameId, userId);
     const gameHasViewer = await getGameHasViewer(gameId, userId);
     if (gameHasPlayer) {
-      return { succes: false, error: 'Je bent al ingeschreven, of je bent een levende speler/verteller in een ander spel' };
+      return { succes: false, error: `${t('TEXTALREADYENROLLED')}` };
     }
     if (gameHasViewer) {
       await promisePool.query(
@@ -687,7 +688,9 @@ async function getNewGame() {
 
 async function getActiveGameWithChannel(channelId) {
   const [ rows ] = await promisePool.query(
-    `select gch_gms_id from game_channels where gch_slack_id = ?`, [channelId] 
+    `select * from games
+    join game_channels on gch_gms_id = gms_id
+    where gch_slack_id = ?`, [channelId] 
   );
   if (!rows[0]) {
     throw 'Dit kanaal is geen onderdeel van een spel';
@@ -732,7 +735,6 @@ async function getActiveGameName () {
 }
 
 async function getNotDrawnPlayers(gameId) {
-
   const [rows] = await promisePool.query(
     `select * 
       from game_players
@@ -755,7 +757,11 @@ async function getNotDrawnPlayers(gameId) {
 
 async function getPlayerList(gameId) {
   const [rows] = await promisePool.query(
-    `select gpl_slack_id from game_players where gpl_gms_id = ? and !gpl_leader and gpl_status <> ? >`, [gameId, playerStates.viewer]
+    `select gpl_slack_id from game_players 
+    where gpl_gms_id = ? 
+    and !gpl_leader 
+    and gpl_status <> ?`, 
+    [gameId, playerStates.viewer]
   );
   return rows;
 }
@@ -803,9 +809,9 @@ async function getPoll(gmsId) {
 async function logChannel(logInput) {
   await promisePool.query(
     `insert into game_channels
-      (gch_gms_id, gch_slack_id, gch_name, gch_type, gch_user_created, gch_created_at)
-        values(?,?,?,?,?,?)`,
-    [logInput.gch_id, logInput.gch_slack_id, logInput.gch_name, logInput.gch_type, logInput.gch_user_created, logInput.gch_created_at]
+      (gch_gms_id, gch_slack_id, gch_name, gch_type, gch_user_created)
+        values(?,?,?,?,?)`,
+    [logInput.gch_id, logInput.gch_slack_id, logInput.gch_name, logInput.gch_type, logInput.gch_user_created]
   );
 }
 

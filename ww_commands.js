@@ -41,38 +41,31 @@ function addCommands(app) {
 
 async function channelList({ command, ack, say }) {
   ack();
-  let returnText;
   try {
     const game = await queries.getActiveGameWithChannel(command.channel_id); 
     const channelPlayersList = [];
     const channelUsersList = await helpers.getUserlist(client, command.channel_id);
     const playerList = await queries.getPlayerList(game.gms_id);
-    for (const user of channelUsersList.members) {
-      if (playerList.members.includes(user.id)) {
-        channelPlayersList.push({
-          id: user.id,
-          name: user.profile.display_name_normalized || user.profile.real_name_normalized,
-          status: user.profile.status_text
-        });
-      }
-    }
+    const inputList = channelUsersList.filter((x) => playerList.map((y) => y.gpl_slack_id).includes(x.id));
+
+    let returnText;
     let seperator = ', ';
     if (command.text.trim() === 'newline') {
       seperator = '\n';
     }
     returnText = `*${t('TEXTLIVING')}* (${
-      channelPlayersList.filter((x) => x.status === t('TEXTPARTICIPANT') || x.status === t('TEXTMAYOR')).length
-    }): ${channelPlayersList
+      inputList.filter((x) => x.status === t('TEXTPARTICIPANT') || x.status === t('TEXTMAYOR')).length
+    }): ${inputList
       .filter((x) => x.status === t('TEXTPARTICIPANT') || x.status === t('TEXTMAYOR'))
       .map((x) => x.name)
       .join(seperator)}\n*${t('TEXTMULTIPLEDEAD')}* (${
-        channelPlayersList.filter((x) => x.status === t('TEXTDEAD')).length
-    }): ${channelPlayersList
+        inputList.filter((x) => x.status === t('TEXTDEAD')).length
+    }): ${inputList
       .filter((x) => x.status === t('TEXTDEAD'))
       .map((x) => x.name)
       .join(seperator)}\n*${t('TEXTNOSTATUS')}* (${
-        channelPlayersList.filter((x) => x.status === '').length
-    }): ${channelPlayersList
+        inputList.filter((x) => x.status === '').length
+    }): ${inputList
       .filter((x) => !x.status)
       .map((x) => x.name)
       .join(seperator)}`;
@@ -625,30 +618,21 @@ async function startSpel({ command, ack, say }) {
         await helpers.sendIM(client, speler.gpl_slack_id, uitgeloot);
       }
       const activePlayerList = [];
-      const activePlayers = await queries.getPlayerList(game.gms_id);
-      const playerList = await queries.getUserlist(client, hoofdkanaal.channel.id);
-      for (const player of playerList.members) {
-        if (activePlayers.members.includes(player.id)) {
-          activePlayerList.push({
-            id: player.id,
-            name: player.profile.display_name_normalized || player.profile.real_name_normalized,
-            status: player.profile.status_text,
-          })
-        }
+      let returnText = [];
+      const usersList = await helpers.getUserlist(client, hoofdkanaal.channel.id);
+      for ( i=0; i < result.playerList.length; i++) {
+        let temp = usersList.filter((y) => y.id == result.playerList[i].gpl_slack_id);
+        returnText += `${temp[0].name}\n`
       }
-      let seperator = ', ';
-      let returnText = `(${activePlayerList
-        .map((x) => x.name)
-        .join(seperator)
-      })`
-
-      say({
+      client.chat.postMessage({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: hoofdkanaal.channel.id,
+        user: command.user_id,
         blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              attachments,
               text: `${params[0]} ${t('TEXTGAMESTARTEDREGISTRATION')} ${returnText}`,
             },
           },
@@ -698,6 +682,7 @@ async function createChannel({ command, ack, say }) {
   ack();
   try {
     const game= await queries.getActiveGameWithChannel(command.channel_id);
+    console.log(game);
     params = command.text.trim().split(' ');
     if (params.length !== 1) {
       const warning = `${t('TEXTONEPARAMETERNEEDED')} ${t('COMMANDCREATECHANNEL')} [${t('TEXTNAMECHANNEL')}]`;
@@ -708,12 +693,12 @@ async function createChannel({ command, ack, say }) {
     if (!alleVertellers.includes(command.user_id)) {
       alleVertellers.push(command.user_id);
     }
-    if (!params[0].match(/^ww0-9.*/)) {
-      const channelName = `${game.gms_name.toLowerCase().split(' ').join('_')}_${params[0].toLowerCase()}`
+    let channelName; 
+    if (/^ww[0-9].*/.test(params[0]) === false) {
+      channelName = `${game.gms_name.toLowerCase().split(' ').join('_')}_${params[0].toLowerCase()}`
     } else {
-      const channelName = params[0].toLowerCase();
+      channelName = params[0].toLowerCase();
     }
-
     const kanaal = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
       name: channelName,
@@ -727,7 +712,7 @@ async function createChannel({ command, ack, say }) {
     await client.chat.postMessage({
       token: process.env.SLACK_BOT_TOKEN,
       channel: kanaal.channel.id,
-      text: `${await helpers.getUserName(command.user_id)} ${t('TEXTCREATEDCHANNEL')}`,
+      text: `${await helpers.getUserName(client, command.user_id)} ${t('TEXTCREATEDCHANNEL')}`,
     });
     const kanaalInput = {
         gch_id: game.gms_id,
@@ -735,13 +720,11 @@ async function createChannel({ command, ack, say }) {
         gch_name: kanaal.channel.name,
         gch_type: channelType.standard,
         gch_user_created: command.user_id,
-        gch_created_at: new Date(Math.floor(Date.now()))
       };
     await queries.logChannel(kanaalInput);
-
   } catch (error) {
       await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDCREATECHANNEL')}: ${error}`);
-    	}
+    }
 }
 
 async function dood({ command, ack, say }) {
@@ -1148,7 +1131,6 @@ async function verdeelRollen({ command, ack, say }) {
       );
       rolLijst.push(`<@${player.user_id}>: ${player.rol}`);
     }
-
     await helpers.sendIM(client, command.user_id, `${t('TEXTROLES')}:\n${rolLijst.join('\n')}`);
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDGIVEROLES')}: ${error}`);
