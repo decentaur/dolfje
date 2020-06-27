@@ -18,6 +18,7 @@ module.exports = {
   getGameName,
   getActiveGameName,
   isVerteller,
+  isSectator,
   getVertellers,
   addVerteller,
   startPoll,
@@ -330,6 +331,18 @@ async function isVerteller(gameId, userId) {
   return rows.length;
 }
 
+async function isSectator(gameId, userId) {
+  const [rows] = await promisePool.query(
+    `select * 
+      from game_players
+      where gpl_gms_id = ?
+      and gpl_slack_id = ?
+      and gpl_status <> ?`,
+    [gameId, userId, playerStates.alive]
+  );
+  return rows.length;
+}
+
 async function getVertellers(gameId) {
   const [rows] = await promisePool.query(
     `select * 
@@ -580,15 +593,13 @@ async function getRules(gameId) {
   return rows[0];
 }
 
-async function messageCountPlusPlus(userId) {
+async function messageCountPlusPlus(userId, gameId) {
   await promisePool.query(
     `update game_players gp 
       set gpl_number_of_messages = coalesce(gpl_number_of_messages,0) +1
       where gpl_slack_id = ?
-      and gpl_gms_id = (select gms_id
-                        from games 
-                        where gms_status <> ?)`,
-    [userId, gameStates.ended]
+      and gpl_gms_id = ?`,
+    [userId, gameId]
   );
 }
 
@@ -600,7 +611,7 @@ async function getGame(status) {
     [status]
   );
   if (rows.length == 0) {
-    throw 'Er kon geen actief spel gevonden worden';
+    throw `${t('TEXTGAMENOTFOUND')}`;
   }
   return rows;
 }
@@ -613,7 +624,7 @@ async function getSpecificGame(gameId) {
     [gameId]
   );
   if (rows.length == 0) {
-    throw 'Het spel kon niet gevonden worden';
+    throw `${t('TEXTGAMENOTFOUND')}`;
   }
   return rows[0];
 }
@@ -662,17 +673,17 @@ async function getGameOpenUser(userId) {
 
 async function getGameVerteller(userId, vertellerId) {
   const [rows] = await promisePool.query(
-    `select * 
-      from games
-      left join (select * from game_players where gpl_slack_id = ?) as gpl
-      on gpl.gpl_gms_id = gms_id
+    `SELECT  * 
+      FROM games
+      LEFT JOIN (SELECT * FROM game_players WHERE gpl_slack_id = ?) AS gpl
+      ON gpl.gpl_gms_id = gms_id 
+      AND gms_status <> ?
       LEFT JOIN (SELECT * FROM game_players WHERE gpl_slack_id = ?) AS gpl2
       ON gpl2.gpl_gms_id= gms_id 
-      where gms_status <> ? 
-      AND gpl2.gpl_status <> ? OR gpl2.gpl_status IS NULL 
-      AND !gpl2.gpl_drawn OR gpl2.gpl_drawn IS null
-      and gpl.gpl_leader`,
-    [userId, vertellerId, gameStates.ended, playerStates.verteller]
+      WHERE gpl2.gpl_status <> ? OR gpl2.gpl_status IS NULL 
+    AND !gpl2.gpl_drawn OR gpl2.gpl_drawn IS NULL
+    and gpl.gpl_leader`,
+    [userId, gameStates.ended, vertellerId, playerStates.verteller]
   );
   return rows;
 }
@@ -705,7 +716,7 @@ async function getActiveGameUser(userId) {
       join game_players on gpl_gms_id = gms_id
       where gms_status <> ? and gpl_slack_id = ?
       and !gpl_not_drawn
-      order by gpl_leader desc, gpl_status asc`,
+      order by gpl_status asc`,
     [gameStates.ended, userId]
   );
   return rows;
@@ -820,7 +831,7 @@ async function getChannel(gameId, channelType) {
     `select gch_slack_id from game_channels where gch_gms_id = ? and gch_type = ?`,
     [gameId, channelType]
   );
-  return rows[0];
+  return rows[0].gch_slack_id;
 }
 
 async function getAllChannels(gameId) {

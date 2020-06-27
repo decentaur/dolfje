@@ -1,4 +1,11 @@
-module.exports = { addActions };
+module.exports = { 
+  addActions, 
+  archiveerClickFunction,
+  inschrijvenFunction,
+  meekijkenFunction,
+  uitschrijvenFunction,
+  vertellerToevoegenFunction
+ };
 
 let helpers = require('./ww_helpers');
 const queries = require('./ww_queries');
@@ -152,18 +159,25 @@ async function vluchtigClick({ body, ack, say }) {
     }
   } catch (error) {
     await helpers.sendIM(client, body.user.id, `Er ging iets mis met het vluchtig stemmen: ${error}`);
-    console.log(error.stack);
-  }
+    }
 }
 
 async function archiveerClick({ body, ack, say }) {
   ack();
+  const channelId = body.actions[0].value;
+  const msgChannelId = body.container.channel_id;
+  const mgsTs = body.container.message_ts;
+  const userId = body.user.id;
+  await archiveerClickFunction(channelId, msgChannelId, msgTs);
+}
+
+async function archiveerClickFunction(channelId, msgChannelId, msgTs, userId) {
   try {
     //await client.conversations.invite({  //use to invite yourself to delete any channels
       await client.conversations.archive({
       token: process.env.SLACK_BOT_TOKEN,
-      channel: body.actions[0].value,
-    //users: body.user.id,
+      channel: channelId,
+    //users: userId,
     });
     const channelList = await client.conversations.list({
       token: process.env.SLACK_BOT_TOKEN,
@@ -202,108 +216,146 @@ async function archiveerClick({ body, ack, say }) {
 
     await client.chat.update({
       token: process.env.SLACK_BOT_TOKEN,
-      channel: body.container.channel_id,
-      ts: body.container.message_ts,
+      channel: msgChannelId,
+      ts: msgTs,
       blocks: buttonblocks
     });
   } catch (error) {
-    await helpers.sendIM(client, body.user.id, `Er ging iets mis met het archiveren: ${error}`);
+    await helpers.sendIM(client, userId, `Er ging iets mis met het archiveren: ${error}`);
   }
 }
 
 async function inschrijven({body, ack, say}) {
-ack();
-try {
-  const userName = await helpers.getUserName(client, body.user.id);
-  const result = await queries.joinGame(body.actions[0].value, body.user.id, userName);
-  const thisGame = await queries.getSpecificGame(body.actions[0].value); 
-  if (result.succes) {
-    await client.chat.postMessage({
-      token: process.env.SLACK_BOT_TOKEN,
-      channel: process.env.REG_CHANNEL,
-      user: body.user.id,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${userName} ${t('TEXTJOINED')} ${t(thisGame.gms_name)}, ${t('TEXTTHEREARE')}  ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')} ${t('TEXTAMOUNTVIEWING')} ${result.numberOfViewers}`,
-          },
-        },
-      ],
-    });
-    const doeMeeMessage = `${t('TEXTJOINEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')} \n ${t('TEXTALIVENOTSELECTED')}`;
-    await helpers.sendIM(client, body.user.id, doeMeeMessage);
-  } else {
+  ack();
+  try{
+    const userId = body.user.id;
+    const gameId = body.actions[0].value;
+    const msgChannelId = body.container.channel_id;
+    const msgTs = body.container.message_ts;
+    const singleGame = false; 
+    await inschrijvenFunction(userId, gameId, msgChannelId, msgTs, singleGame);
+  } catch(error) {
     await helpers.sendIM(
       client,
       body.user.id,
       `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLJOIN')}: ${result.error}`
     );
   }
-  const games = await queries.getGameRegisterUser(body.user.id);
-  if (games.length > 0) {
-    let buttonElements = [{
-      type: 'button',
-      text: {
-        type: 'plain_text',
-        text: `${t('TEXTCLOSEMESSAGE')}`,
-      },
-      value: 'Close',
-      action_id: `delete-${body.container.channel_id}`,
-    }];
-    for (const game of games) {
-    buttonElements.push({
-      type: 'button',
-      text: {
-        type: 'plain_text',
-        text: game.gms_name,
-      },
-      value: game.gms_id.toString(),
-      action_id: `inschrijven-${game.gms_id}`,
-    });
-  };
-    let buttonblocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKREGISTER')}`,
-        },
-      },
-      {
-        type: 'actions',
-        elements: buttonElements,
-      }];
-    await client.chat.update({
+}
+
+async function inschrijvenFunction(userId, gameId, msgChannelId, msgTs, singleGame) {
+try {
+  const userName = await helpers.getUserName(client, userId);
+  const result = await queries.joinGame(gameId, userId, userName);
+  const thisGame = await queries.getSpecificGame(gameId); 
+  if (result.succes) {
+    await client.chat.postMessage({
       token: process.env.SLACK_BOT_TOKEN,
-      channel: body.container.channel_id,
-      ts: body.container.message_ts,
-      blocks: buttonblocks
+      channel: process.env.REG_CHANNEL,
+      user: userId,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${userName} ${t('TEXTJOINED')} ${t(thisGame.gms_name)}, ${t('TEXTTHEREARE')} ${result.numberOfPlayers} ${t('TEXTAMOUNTJOINED')} ${t('TEXTAMOUNTVIEWING')} ${result.numberOfViewers}`,
+          },
+        },
+      ],
     });
+    const doeMeeMessage = `${t('TEXTJOINEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')} \n ${t('TEXTALIVENOTSELECTED')}`;
+    await helpers.sendIM(client, userId, doeMeeMessage);
   } else {
+    await helpers.sendIM(
+      client,
+      userId,
+      `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLJOIN')}: ${result.error}`
+    );
+  }
+  if (!singleGame) {
+    console.log(singleGame, 'SingleGame');
+    const games = await queries.getGameRegisterUser(userId);
+    if (games.length > 0) {
+      let buttonElements = [{
+        type: 'button',
+        text: {
+          type: 'plain_text',
+          text: `${t('TEXTCLOSEMESSAGE')}`,
+        },
+        value: 'Close',
+        action_id: `delete-${msgChannelId}`,
+      }];
+      for (const game of games) {
+      buttonElements.push({
+        type: 'button',
+        text: {
+          type: 'plain_text',
+          text: game.gms_name,
+        },
+        value: game.gms_id.toString(),
+        action_id: `inschrijven-${game.gms_id}`,
+      });
+    };
+      let buttonblocks = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKREGISTER')}`,
+          },
+        },
+        {
+          type: 'actions',
+          elements: buttonElements,
+        }];
+      await client.chat.update({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: msgChannelId,
+        ts: msgTs,
+        blocks: buttonblocks
+      });
+    } else {
     await client.chat.delete({
       token: process.env.SLACK_BOT_TOKEN,
-      channel: body.container.channel_id,
-      ts: body.container.message_ts
+      channel: msgChannelId,
+      ts: msgTs,
     }); 
+    }
   }
   } catch (error) {
-    await helpers.sendIM(client, body.user.id, `Er ging iets mis met deelnemen: ${error}`);
+    await helpers.sendIM(client, userId, `Er ging iets mis met deelnemen: ${error}`);
   }
 }
 
 async function meekijken({body, ack, say}) {
   ack();
+  try {
+    const userId = body.user.id;
+    const gameId = body.actions[0].value;
+    const msgChannelId = body.container.channel_id;
+    const msgTs = body.container.message_ts;
+    const singleGame = false;
+    await meekijkenFunction(userId, gameId, msgChannelId, msgTs, singleGame);
+  } catch(error) {
+    await helpers.sendIM(
+      client,
+      body.user.id,
+      `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLVIEW')}: ${result.error}`
+    );
+  }
+
+}
+
+async function meekijkenFunction(userId, gameId, msgChannelId, msgTs, singleGame) {
   try{
-  const userName = await helpers.getUserName(client, body.user.id);
-  const game = await queries.getSpecificGame(body.actions[0].value);
-  const result = await queries.viewGame(body.user.id, userName, game.gms_id);
+  const userName = await helpers.getUserName(client, userId);
+  const game = await queries.getSpecificGame(gameId);
+  const result = await queries.viewGame(userId, userName, game.gms_id);
   if (result.succes) {
     if (game.gms_status === 'REGISTERING') {
       client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
-        user: body.user.id,
+        user: userId,
         channel: process.env.REG_CHANNEL, 
         blocks: [
           {
@@ -318,7 +370,7 @@ async function meekijken({body, ack, say}) {
     } else if (game.gms_status === 'STARTED') {
       client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
-        user: body.user.id,
+        user: userId,
         channel: process.env.REG_CHANNEL,
         blocks: [
           {
@@ -336,21 +388,21 @@ async function meekijken({body, ack, say}) {
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: mainId.gch_slack_id,
-        users: body.user.id
+        users: userId,
       });
       //invite player to stemhok
       const voteId = await queries.getChannel(game.gms_id, channelType.vote);
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: voteId.gch_slack_id,
-        users: body.user.id
+        users: userId,
       });
       //invite player to sectators
       const sectatorId = await queries.getChannel(game.gms_id, channelType.viewer);
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: sectatorId.gch_slack_id,
-        users: body.user.id
+        users: userId,
       });
       //send IM to vertellers
       const vertellerMessage  = `${t('TEXTVIEWERJOINED')} ${userName}`;
@@ -360,77 +412,98 @@ async function meekijken({body, ack, say}) {
         }
     }
     const viewMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
-    await helpers.sendIM(client, body.user.id, viewMessage);
-    const games = await queries.getGameOpenUser(body.user.id);
+    await helpers.sendIM(client, userId, viewMessage);
 
-    if (games.length > 0) {
-      let buttonElements = [{
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: `${t('TEXTCLOSEMESSAGE')}`,
-        },
-        value: 'Close',
-        action_id: `delete-${body.container.channel_id}`,
-      }];
-      for (const singlegame of games) {
-      buttonElements.push({
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: singlegame.gms_name,
-        },
-        value: singlegame.gms_id.toString(),
-        action_id: `meekijken-${singlegame.gms_id}`,
-      });
-    };
-      let buttonblocks = [
-        {
-          type: 'section',
+    
+    if (!singleGame) {
+      const games = await queries.getGameOpenUser(userId);
+
+      if (games.length > 0) {
+        let buttonElements = [{
+          type: 'button',
           text: {
-            type: 'mrkdwn',
-            text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKVIEW')}`,
+            type: 'plain_text',
+            text: `${t('TEXTCLOSEMESSAGE')}`,
           },
-        },
-        {
-          type: 'actions',
-          elements: buttonElements,
+          value: 'Close',
+          action_id: `delete-${msgChannelId}`,
         }];
-        await client.chat.update({
-          token: process.env.SLACK_BOT_TOKEN,
-          channel: body.container.channel_id,
-          ts: body.container.message_ts,
-          blocks: buttonblocks
+        for (const singleGame of games) {
+        buttonElements.push({
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: singleGame.gms_name,
+          },
+          value: singleGame.gms_id.toString(),
+          action_id: `meekijken-${singleGame.gms_id}`,
         });
-    } else {  
-      await client.chat.delete({
-      token: process.env.SLACK_BOT_TOKEN,
-      channel: body.container.channel_id,
-      ts: body.container.message_ts
-    }); 
+      };
+        let buttonblocks = [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKVIEW')}`,
+            },
+          },
+          {
+            type: 'actions',
+            elements: buttonElements,
+          }];
+          await client.chat.update({
+            token: process.env.SLACK_BOT_TOKEN,
+            channel: msgChannelId,
+            ts: msgTs,
+            blocks: buttonblocks
+          });
+      } else {  
+        await client.chat.delete({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: msgChannelId,
+        ts: msgTs,
+      }); 
+     }
     }
   } else {
     await helpers.sendIM(
       client,
-      body.user.id,
+      userId,
       `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLVIEW')}: ${result.error}`
     );
   }
 } catch (error) {
-  await helpers.sendIM(client, body.user.id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLVIEW')}: ${error}`);
+  await helpers.sendIM(client, userId, `${t('TEXTCOMMANDERROR')} ${t('COMMANDIWILLVIEW')}: ${error}`);
   }
 }
 
 async function uitschrijven({body, ack, say}) {
   ack();
   try {
-    const userName = await helpers.getUserName(client, body.user.id);
-    const result = await queries.leaveGame(body.actions[0].value, body.user.id);
-    const thisGame = await queries.getSpecificGame(body.actions[0].value);
+    const userId = body.user.id;
+    const gameId = body.actions[0].value;
+    const msgChannelId = body.container.channel_id;
+    const msgTs = body.container.message_ts;
+    const singleGame = false;
+    await uitschrijvenFunction(userI, gameId, msgChannelId, msgTs, singleGame);
+  } catch(error) {
+    await helpers.sendIM(
+      client,
+      body.user.id,
+      `${t('TEXTCOMMANDERROR')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}: ${error}`
+    );
+  }
+}
+
+async function uitschrijvenFunction(userId, gameId, msgChannelId, msgTs, singleGame) {
+  try {
+    const userName = await helpers.getUserName(client, userId);
+    const result = await queries.leaveGame(gameId, userId);
+    const thisGame = await queries.getSpecificGame(gameId);
     if (result.succes) {
       client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
-        user: body.user.id,
+        user: userId,
         channel: process.env.REG_CHANNEL,
         blocks: [
           {  
@@ -443,65 +516,67 @@ async function uitschrijven({body, ack, say}) {
         ],
       });
       const doeMeeMessage = `${t('TEXTPLAYERNOTINGAME')} ${thisGame.gms_name}. ${t('TEXTCHANGEDMIND')} ${t('COMMANDIWILLJOIN')}`;
-      await helpers.sendIM(client, body.user.id, doeMeeMessage);
-      const games = await queries.getGameUnregisterUser(body.user.id);  
-      if (games.length > 0) {
-        let buttonElements = [{
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: `${t('TEXTCLOSEMESSAGE')}`,
-          },
-          value: 'Close',
-          action_id: `delete-${body.container.channel_id}`,
-        }];
-        for (const game of games) {
-        buttonElements.push({
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: game.gms_name,
-          },
-          value: game.gms_id.toString(),
-          action_id: `uitschrijven-${game.gms_id}`,
-        });
-      };
-        let buttonblocks = [
-          {
-            type: 'section',
+      await helpers.sendIM(client, userId, doeMeeMessage);
+      if (!singleGame) {
+        const games = await queries.getGameUnregisterUser(userId);  
+        if (games.length > 0) {
+          let buttonElements = [{
+            type: 'button',
             text: {
-              type: 'mrkdwn',
-              text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKUNREGISTER')}`,
+              type: 'plain_text',
+              text: `${t('TEXTCLOSEMESSAGE')}`,
             },
-          },
-          {
-            type: 'actions',
-            elements: buttonElements,
+            value: 'Close',
+            action_id: `delete-${msgChannelId}`,
           }];
-          await client.chat.update({
-            token: process.env.SLACK_BOT_TOKEN,
-            channel: body.container.channel_id,
-            ts: body.container.message_ts,
-            blocks: buttonblocks
+          for (const game of games) {
+          buttonElements.push({
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: game.gms_name,
+            },
+            value: game.gms_id.toString(),
+            action_id: `uitschrijven-${game.gms_id}`,
           });
-      } else {
-        await client.chat.delete({
-          token: process.env.SLACK_BOT_TOKEN,
-          channel: body.container.channel_id,
-          ts: body.container.message_ts
-        }); 
+        };
+          let buttonblocks = [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKUNREGISTER')}`,
+              },
+            },
+            {
+              type: 'actions',
+              elements: buttonElements,
+            }];
+            await client.chat.update({
+              token: process.env.SLACK_BOT_TOKEN,
+              channel: msgChannelId,
+              ts: msgTs,
+              blocks: buttonblocks,
+            });
+        } else {
+          await client.chat.delete({
+            token: process.env.SLACK_BOT_TOKEN,
+            channel: msgChannelId,
+            ts: msgTs,
+          }); 
+        }
       }
     } else {
       await helpers.sendIM(
         client,
-        body.user.id,
+        userId,
         `${t('TEXTCOMMANDERROR')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}: ${result.error}`
       );
     }
   } catch (error) {
     await helpers.sendIM(
       client,
-      body.user.id,
+      userId,
       `${t('TEXTCOMMANDERROR')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}: ${error}`
     );
   }
@@ -510,11 +585,27 @@ async function uitschrijven({body, ack, say}) {
 async function vertellerToevoegen({body, ack, say}) {
   ack();
   try {
-    const vertellerId = body.actions[0].value; 
+    const vertellerId = body.actions[0].value;
+    const userId = body.user.id;
+    const channelId = body.channel.id;
     const gameId = body.actions[0].action_id.trim().split('-');
-    const thisGame = await queries.getSpecificGame(gameId[1]); 
+    const msgChannelId = body.container.channel_id;
+    const msgTs = body.container.message_ts;
+    const singleGame = false;
+    await vertellerToevoegenFunction(vertellerId, userId, channelId, gameId, msgChannelId, msgTs, singleGame);
+  } catch(error) {
+    await helpers.sendIM(
+      client,
+      userId,
+      `${t('TEXTCOMMANDERROR')} ${t('COMMANDEXTRAMODERATOR')}: ${error}`
+    );
+  }
+}
+
+async function vertellerToevoegenFunction(vertellerId, userId, mainChannel, gameId, msgChannelId, msgTs, singleGame) {
+  try {
+    const thisGame = await queries.getSpecificGame(gameId); 
     const userName = await helpers.getUserName(client, vertellerId);
-    let mainChannel = body.channel.id;
     await queries.addVerteller(vertellerId, userName, thisGame.gms_id);
     if (thisGame.gms_status === 'STARTED') {
         const allChannels = await queries.getAllChannels(thisGame.gms_id)
@@ -531,7 +622,7 @@ async function vertellerToevoegen({body, ack, say}) {
       }
     client.chat.postMessage({
       token: process.env.SLACK_BOT_TOKEN,
-      user: body.user.id,
+      user: userId,
       channel: mainChannel,
       blocks: [
         {
@@ -545,63 +636,67 @@ async function vertellerToevoegen({body, ack, say}) {
     });
     const message = `${t('TEXTBECAMEMODERATOR')} ${thisGame.gms_name}`;
     await helpers.sendIM(client, vertellerId, message);
-
-    const games = await queries.getGameVerteller(body.user.id, vertellerId);
-    if (games.length > 0) {
-      let buttonElements = [{
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: `${t('TEXTCLOSEMESSAGE')}`,
-        },
-        value: 'Close',
-        action_id: `delete-${body.container.channel_id}`,
-      }];
-      for (const game of games) {
-      buttonElements.push({
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: game.gms_name,
-        },
-        value: vertellerId,
-        action_id: `verteller-${game.gms_id}`,
-      });
-    };
-      let buttonblocks = [
-        {
-          type: 'section',
+    if (!singleGame) {
+      const games = await queries.getGameVerteller(userId, vertellerId);
+      if (games.length > 0) {
+        let buttonElements = [{
+          type: 'button',
           text: {
-            type: 'mrkdwn',
-            text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKVERTELLER')}`,
+            type: 'plain_text',
+            text: `${t('TEXTCLOSEMESSAGE')}`,
           },
-        },
-        {
-          type: 'actions',
-          elements: buttonElements,
+          value: 'Close',
+          action_id: `delete-${msgChannelId}`,
         }];
-      await client.chat.update({
-        token: process.env.SLACK_BOT_TOKEN,
-        channel: body.container.channel_id,
-        ts: body.container.message_ts,
-        blocks: buttonblocks
-      });
-    } else {
-      await client.chat.delete({
-        token: process.env.SLACK_BOT_TOKEN,
-        channel: body.container.channel_id,
-        ts: body.container.message_ts
-      }); 
+        for (const game of games) {
+        buttonElements.push({
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: game.gms_name,
+          },
+          value: vertellerId,
+          action_id: `verteller-${game.gms_id}`,
+        });
+      };
+        let buttonblocks = [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKVERTELLER')}`,
+            },
+          },
+          {
+            type: 'actions',
+            elements: buttonElements,
+          }];
+        await client.chat.update({
+          token: process.env.SLACK_BOT_TOKEN,
+          channel: msgChannelId,
+          ts: msgTs,
+          blocks: buttonblocks,
+        });
+      } else {
+        await client.chat.delete({
+          token: process.env.SLACK_BOT_TOKEN,
+          channel: msgChannelId,
+          ts: msgTs,
+        }); 
+      }
     }
-    } catch (error) {
-      await helpers.sendIM(client, body.user.id, error);
-    }
+  } catch (error) {
+    await helpers.sendIM(
+      client,
+      userId,
+      `${t('TEXTCOMMANDERROR')} ${t('COMMANDEXTRAMODERATOR')}: ${error}`
+    );
   }
+}
 
 async function deleteMessage({body, ack, say}) {
   ack();
   try {
-    console.log(body);
   await client.chat.delete({
     token: process.env.SLACK_BOT_TOKEN,
     channel: body.container.channel_id,

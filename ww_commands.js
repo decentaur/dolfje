@@ -1,6 +1,8 @@
 const helpers = require('./ww_helpers');
 const queries = require('./ww_queries');
+const actions = require('./ww_actions');
 const { t } = require('localizify');
+const { inschrijvenFunction } = require('./ww_actions');
 module.exports = { addCommands };
 let client;
 
@@ -13,6 +15,7 @@ const channelType = {
 
 function addCommands(app) {
   client = app.client;
+  app.command('/wwtest', testcommand);
   app.command(t('COMMANDLIST'), channelList);
   app.command(t('COMMANDSTATUS'), status);
   app.command(t('COMMANDRULES'), regels);
@@ -37,6 +40,22 @@ function addCommands(app) {
   app.command(t('COMMANDGIVEROLES'), verdeelRollen);
   app.command(t('COMMANDLOTTO'), lotto);
   app.command(t('COMMANDHELP'), help);
+}
+
+async function testcommand({command, ack, say}) {
+  ack();
+  const body= {
+    user: {id: command.user_id},
+    actions: [
+      {
+        action_id: 'testen-1',
+        text: 'Test',
+        value: '12',
+        type: 'button',
+        action_ts: '1592661379.905470'
+      }]
+  }
+  await actions.testen({body});
 }
 
 async function channelList({ command, ack, say }) {
@@ -155,7 +174,6 @@ async function regels({ command, ack, say }) {
   try {
     game = await queries.getActiveGameWithChannel(command.channel_id);
     let regels = await queries.getRules(game.gms_id);
-    console.log(regels)
     if (!regels) {
       regels = {
         gru_name: `${t('TEXTNORULES')}`,
@@ -195,60 +213,13 @@ async function archiveren({ command, ack, say }) {
     }
     const game = await queries.getGameName(params[1]);
     const channelList = await queries.getAllChannels(game.gms_id);
-    const im = await client.conversations.open({
-      token: process.env.SLACK_BOT_TOKEN,
-      users: command.user_id,
-    });
-
-    let buttonElements = [{
-      type: 'button',
-      text: {
-        type: 'plain_text',
-        text: `${t('TEXTCLOSEMESSAGE')}`,
-      },
-      value: 'Close',
-      action_id: `delete-${command.channel_id}`,
-    }];
-    // buttonElements.push({
-    //   type: 'button',
-    //   text: {
-    //     type: 'plain_text',
-    //     text: `${t('TEXTALLCHANNELS')}`
-    //   },
-    //   value: 'AllChannels',
-    //   action_id: 'archiveer-AllChannels'
-    // })
     for (const oneChannel of channelList) {
-      buttonElements.push({
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: channelList.gch_name,
-        },
-        value: channelList.gch_slack_id.toString(),
-        action_id: `archiveer-${channelList.gch_slack_id}`,
+      await client.conversations.archive({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: oneChannel.gch_slack_id,
       });
     }
-
-    let buttonblocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKARCHIVECHANNELS')}`,
-        },
-      },
-      {
-        type: 'actions',
-        elements: buttonElements,
-      }];
-
-    await client.chat.postMessage({
-      token: process.env.SLACK_BOT_TOKEN,
-      channel: im.channel.id,
-      user: command.user_id,
-      blocks: buttonblocks,
-    });
+    await helpers.sendIM(client, command.user_id, `${game.gms_name} ${t('TEXTARCHIVED')}`)
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDARCHIVE')}: ${error}`);
   }
@@ -264,7 +235,8 @@ async function startStemRonde({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-    const channelUsersList = await helpers.getUserlist(client, command.channel_id);
+    const channelId = await queries.getChannel(game.gms_id, channelType.vote);
+    const channelUsersList = await helpers.getUserlist(client, channelId);
     await queries.startPoll(game.gms_id, command.text.trim() || ' ');
     const playersAlive = await queries.getAlive(game.gms_id);
     const channelUsersAlive = channelUsersList.filter((x) => playersAlive.map((y) => y.user_id).includes(x.id));
@@ -298,10 +270,9 @@ async function startStemRonde({ command, ack, say }) {
           })),
         },
       ]);
-
     const message = await client.chat.postMessage({
       token: process.env.SLACK_BOT_TOKEN,
-      channel: command.channel_id,
+      channel: channelId,
       blocks: buttonblocks,
     });
     await queries.setMessageIdPoll(game.gms_id, message);
@@ -394,7 +365,7 @@ async function stemStand({ command, ack, say }) {
   ack();
   try {
     const game = await queries.getActiveGameWithChannel(command.channel_id);
-    if (!(await queries.isVerteller(game.gms_id, command.user_id))) {
+    if (!(await queries.isSectator(game.gms_id, command.user_id))) {
       const warning = `${t('TEXTMODERATORVOTESCORE')}`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
@@ -417,7 +388,7 @@ async function startVluchtigeStemRonde({ command, ack, say }) {
   ack();
   try {
     const gameId = await queries.getActiveGameWithChannel(command.channel_id);
-    let playersAlive = await queries.getAlive(gameId);
+    let playersAlive = await queries.getAlive(gameId.gms_id);
     playersAlive = await helpers.addSlackName(client, playersAlive);
     const chuckedUsersAlive = [];
     while (playersAlive.length) {
@@ -669,7 +640,22 @@ async function stopSpel({ command, ack, say }) {
     }
     const result = await queries.stopGame(game.gms_id);
     if (result.succes) {
-      await helpers.sendIM(client, command.user_id, `${t('TEXTGAMECLOSED')}`);
+      const allGames = await queries.getAllChannels(game.gms_id);
+      for (const singleChannel of allGames) {
+        const spelers = await queries.getEveryOne(game.gms_id);
+        const channelUsersList = await helpers.getUserlist(client, singleChannel.gch_slack_id);
+        const uitTeNodigen = spelers.filter((x) => !channelUsersList.map((y) => y.id).includes(x.user_id));
+        if (!uitTeNodigen.length) {
+          await helpers.sendIM(client, command.user_id, `${singleChannel.gch_name}: ${t('TEXTALLINVITED')}`);
+        } else {
+          await client.conversations.invite({
+            token: process.env.SLACK_BOT_TOKEN,
+            channel: command.channel_id,
+            users: uitTeNodigen.map((x) => x.user_id).join(','),
+          });
+        }
+      }
+      await helpers.sendIM(client, command.user_id, `${game.gms_name} ${t('TEXTGAMECLOSED')}`);
     } else {
       await helpers.sendIM(client, command.user_id, result.error);
     }
@@ -682,7 +668,6 @@ async function createChannel({ command, ack, say }) {
   ack();
   try {
     const game= await queries.getActiveGameWithChannel(command.channel_id);
-    console.log(game);
     params = command.text.trim().split(' ');
     if (params.length !== 1) {
       const warning = `${t('TEXTONEPARAMETERNEEDED')} ${t('COMMANDCREATECHANNEL')} [${t('TEXTNAMECHANNEL')}]`;
@@ -758,6 +743,7 @@ async function dood({ command, ack, say }) {
       channel: channelId,
       users: userId,
     });
+    await helpers.sendIM(client, command.user_id, `${params[0]} is ${t('TEXTDEAD')}`);
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDDEAD')}: ${error}`);
   }
@@ -794,6 +780,7 @@ async function reanimeer({ command, ack, say }) {
       channel: channelId,
       user: userId,
     });
+    await helpers.sendIM(client, command.user_id, `${params[0]} is ${t('TEXTALIVE')}`);
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDREVIVE')}: ${error}`);
   }
@@ -815,7 +802,9 @@ async function extraVerteller({ command, ack, say }) {
     }    
     const vertellerId = params[0].match(/^<@([A-Z0-9]*)(\|.*)?>/)[1];
     const games = await queries.getGameVerteller(command.user_id, vertellerId);
-    if (games.length > 0) {
+    if (games.length == 1) {
+      await actions.vertellerToevoegenFunction(vertellerId, command.user_id, command.channel_id, games[0].gms_id, 0,0, true);
+    } else if (games.length > 0) {
       const im = await client.conversations.open({
         token: process.env.SLACK_BOT_TOKEN,
         users: command.user_id,
@@ -927,7 +916,9 @@ async function ikDoeMee({ command, ack, say }) {
   ack(); 
   try {
     const games = await queries.getGameRegisterUser(command.user_id);
-    if (games.length > 0) {
+    if (games.length == 1) {
+      await actions.inschrijvenFunction(command.user_id, games[0].gms_id, 0, 0, true);
+    } else if (games.length > 0) {
       const im = await client.conversations.open({
         token: process.env.SLACK_BOT_TOKEN,
         users: command.user_id,
@@ -982,7 +973,9 @@ async function ikKijkMee({ command, ack, say }) {
 ack();
 try{
   const games = await queries.getGameOpenUser(command.user_id);
-  if (games.length > 0) {
+  if (games.length == 1) {
+    await actions.meekijkenFunction(command.user_id, games[0].gms_id, 0, 0, true);
+  } else if (games.length > 0) {
     const im = await client.conversations.open({
       token: process.env.SLACK_BOT_TOKEN,
       users: command.user_id,
@@ -1037,7 +1030,9 @@ async function ikDoeNietMeerMee({ command, ack, say }) {
   ack();
   try {
   const games = await queries.getGameUnregisterUser(command.user_id);
-  if (games.length > 0) {
+  if (games.length == 1) {
+    await actions.uitschrijvenFunction(command.user_id, games[0].gms_id, 0,0, true);
+  } else if (games.length > 0) {
     const im = await client.conversations.open({
     token: process.env.SLACK_BOT_TOKEN,
     users: command.user_id,

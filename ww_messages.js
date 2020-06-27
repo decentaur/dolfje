@@ -172,6 +172,6 @@ async function herinnerStemmers({ message, say }) {
 }
 
 async function registerMessage({ message, say }) {
-  console.log(message);
-  await queries.messageCountPlusPlus(message.user);
+  const game = await queries.getActiveGameWithChannel(message.channel);
+  await queries.messageCountPlusPlus(message.user, game.gms_id);
 }
