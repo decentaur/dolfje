@@ -682,7 +682,7 @@ async function dood({ command, ack, say }) {
       return;
     }
     if (/^<(@[A-Z0-9]*)(\|.*)?>/.test(params[0]) === false) {
-      const warning = `TEXTFIRSTPARAMETERSHOULD ${t('COMMANDDEAD')} ${t('TEXTSHOULDBEA')}`;
+      const warning = `${t('TEXTFIRSTPARAMETERSHOULD')} ${t('COMMANDDEAD')} ${t('TEXTSHOULDBEA')}`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
