@@ -1022,23 +1022,51 @@ async function verdeelRollen({ command, ack, say }) {
     }
     const playersAlive = await queries.getAlive();
     helpers.shuffle(playersAlive);
+	let neededRoles = playersAlive.length;
     let playerIndex = 0;
+    let optionals = [];
 
     for (const rol of params) {
       const rolNaam = rol.split(':')[0];
       const aantal = rol.split(':')[1];
-      if (aantal) {
-        for (let i = 0; i < aantal; i++) {
-          playersAlive[playerIndex++].rol = rolNaam;
-        }
-      } else {
-        for (const player of playersAlive) {
-          if (!player.rol) {
-            player.rol = rolNaam;
-          }
-        }
-      }
+	  
+	  let aantalMin = 0;
+	  let aantalOpt = 0;
+	  
+	  if (aantal) {
+		  if (aantal.split('-').length == 2) {
+			aantalMin = parseInt(aantal.split('-')[0]);
+			aantalOpt = parseInt(aantal.split('-')[1]) - aantalMin;
+			neededRoles -= aantalMin;
+		  } else if (aantal.split('-').length == 1) {
+			aantalMin = parseInt(aantal.split('-')[0]);
+			neededRoles -= aantalMin;
+		  }
+	  }	  else {
+		// The value for aantalOpt is the number of players minus the minumum number for each role
+		aantalOpt = neededRoles;
+	  }		  
+	  
+	  // First give all the mandatory roles
+	  for (let i = 0; i < aantalMin; i++) {
+		playersAlive[playerIndex++].rol = rolNaam;
+	  }
+	  
+	  // Store the optional roles for later use
+	  for (let i = 0; i< aantalOpt; i++) {
+		  optionals.push(rolNaam)
+	  }
+	}
+	
+	// shuffle the remaining roles
+	helpers.shuffle(optionals);
+	
+	for (const player of playersAlive) {
+	  if (!player.rol) {
+		player.rol = optionals.pop();
+	  }
     }
+	
     const rolLijst = [];
     for (const player of playersAlive) {
       await helpers.sendIM(
