@@ -514,7 +514,7 @@ async function startSpel({ command, ack, say }) {
 
     const hiernamaals = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
-      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_sectators`,
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTSPECTATORS')}`,
       is_private: true,
     });
 
@@ -942,11 +942,11 @@ async function ikKijkMee({ command, ack, say }) {
           channel: voteId.gch_slack_id,
           users: command.user_id,
         });
-        //invite player to sectators
-        const sectatorId = await queries.getChannel(state[0].gms_id, channelType.viewer);
+        //invite player to spectators
+        const spectatorId = await queries.getChannel(state[0].gms_id, channelType.viewer);
         await client.conversations.invite({
           token: process.env.SLACK_BOT_TOKEN,
-          channel: sectatorId.gch_slack_id,
+          channel: spectatorId.gch_slack_id,
           users: command.user_id,
         });
         //send IM to vertellers
@@ -1009,17 +1009,22 @@ async function ikDoeNietMeerMee({ command, ack, say }) {
 async function verdeelRollen({ command, ack, say }) {
   ack();
   try {
+    // Only a moderator can give this command
     if (!(await queries.isVerteller(command.user_id))) {
       const warning = `${t('TEXTONLYMODERATORROLES')}`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
     const params = command.text.trim().split(' ');
-    if (!command.text.trim().endsWith(':')) {
-      const warning = `${t('TEXTNOCIVILIANS')}`;
-      await helpers.sendIM(client, command.user_id, warning);
-      return;
-    }
+    // The following lines removed because in the new setup you can 
+    // (and are encouraged to do so) set the number of civilians
+    
+//     if (!command.text.trim().endsWith(':')) {
+//       const warning = `${t('TEXTNOCIVILIANS')}`;
+//       await helpers.sendIM(client, command.user_id, warning);
+//       return;
+//     }
+
     const playersAlive = await queries.getAlive();
     helpers.shuffle(playersAlive);
 	let neededRoles = playersAlive.length;
@@ -1045,6 +1050,8 @@ async function verdeelRollen({ command, ack, say }) {
 	  }	  else {
 		// The value for aantalOpt is the number of players minus the minumum number for each role
 		aantalOpt = neededRoles;
+		// Now we don't have need for more optional roles
+		neededRoles = 0;
 	  }		  
 	  
 	  // First give all the mandatory roles
@@ -1062,8 +1069,11 @@ async function verdeelRollen({ command, ack, say }) {
 	helpers.shuffle(optionals);
 	
 	for (const player of playersAlive) {
-	  if (!player.rol) {
+	  if (!player.rol && optionals.length>0) {
 		player.rol = optionals.pop();
+	  } else if (!player.rol && optionals.length == 0) {
+	  	// We don't have enough roles for all the players
+	  	throw `${t('TEXTNOTENOUGHROLES')}`;
 	  }
     }
 	
