@@ -1,4 +1,11 @@
-module.exports = { getUserlist, getUserName, sendIM, shuffle, postDelayed, addSlackName };
+module.exports = { 
+  getUserlist, 
+  getUserName, 
+  sendIM, 
+  shuffle,
+  postDelayed,
+  addSlackName
+};
 
 async function getUserlist(client, channelId) {
   const channelUsersList = [];
@@ -99,7 +106,6 @@ function postNotVoted(client, channel, postArray) {
   const notVoteMessage = `Je hebt niet gestemd, stemmen is verplicht, als je twee keer niet stemt zonder afstemming zal de verteller je uit het spel halen; vergeet alsjeblieft volgende keer niet te stemmen!`;
   for (const player of postArray) {
     if (!player.hasVoted) {
-      console.log(player);
       notVoteList.push(`<@${player.id}> (${player.missedVotes}x)`);
       sendIM(client, player.id, notVoteMessage);
     }

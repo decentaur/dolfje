@@ -7,7 +7,8 @@ CREATE TABLE `games` (
   `gms_status` varchar(255),
   `gms_vote_style` varchar(255),
   `gms_created_at` timestamp,
-  `gms_gru_id` int
+  `gms_gru_id` int,
+  `gms_revive` int
 );
 
 CREATE TABLE `game_players` (
@@ -17,6 +18,7 @@ CREATE TABLE `game_players` (
   `gpl_status` varchar(255),
   `gpl_leader` boolean,
   `gpl_drawn` boolean,
+  `gpl_not_drawn` boolean,
   `gpl_number_of_messages` int,
   PRIMARY KEY (`gpl_gms_id`, `gpl_slack_id`)
 );
@@ -47,7 +49,7 @@ CREATE TABLE `game_rules` (
   `gru_rules` text
 );
 
- CREATE TABLE  `game_channels` (
+ CREATE TABLE `game_channels` (
   `gch_gms_id` int, 
   `gch_slack_id` varchar(255),
   `gch_name` varchar(255),
