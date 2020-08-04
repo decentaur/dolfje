@@ -506,7 +506,7 @@ async function startSpel({ command, ack, say }) {
 
     const hiernamaals = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
-      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_sectators`,
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTSPECTATORS')}`,
       is_private: true,
     });
 
@@ -715,7 +715,7 @@ async function dood({ command, ack, say }) {
       return;
     }
     if (/^<(@[A-Z0-9]*)(\|.*)?>/.test(params[0]) === false) {
-      const warning = `TEXTFIRSTPARAMETERSHOULD ${t('COMMANDDEAD')} ${t('TEXTSHOULDBEA')}`;
+      const warning = `${t('TEXTFIRSTPARAMETERSHOULD')} ${t('COMMANDDEAD')} ${t('TEXTSHOULDBEA')}`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
@@ -1111,30 +1111,67 @@ async function verdeelRollen({ command, ack, say }) {
       return;
     }
     const params = command.text.trim().split(' ');
-    if (!command.text.trim().endsWith(':')) {
-      const warning = `${t('TEXTNOCIVILIANS')}`;
-      await helpers.sendIM(client, command.user_id, warning);
-      return;
-    }
-    const playersAlive = await queries.getAlive(game.gms_id);
+    // The following lines removed because in the new setup you can
+    // (and are encouraged to do so) set the number of civilians
+
+    //     if (!command.text.trim().endsWith(':')) {
+    //       const warning = `${t('TEXTNOCIVILIANS')}`;
+    //       await helpers.sendIM(client, command.user_id, warning);
+    //       return;
+    //     }
+
+    const playersAlive = await queries.getAlive();
     helpers.shuffle(playersAlive);
+    let neededRoles = playersAlive.length;
     let playerIndex = 0;
+    let optionals = [];
 
     for (const rol of params) {
       const rolNaam = rol.split(':')[0];
       const aantal = rol.split(':')[1];
+
+      let aantalMin = 0;
+      let aantalOpt = 0;
+
       if (aantal) {
-        for (let i = 0; i < aantal; i++) {
-          playersAlive[playerIndex++].rol = rolNaam;
+        if (aantal.split('-').length == 2) {
+          aantalMin = parseInt(aantal.split('-')[0]);
+          aantalOpt = parseInt(aantal.split('-')[1]) - aantalMin;
+          neededRoles -= aantalMin;
+        } else if (aantal.split('-').length == 1) {
+          aantalMin = parseInt(aantal.split('-')[0]);
+          neededRoles -= aantalMin;
         }
       } else {
-        for (const player of playersAlive) {
-          if (!player.rol) {
-            player.rol = rolNaam;
-          }
-        }
+        // The value for aantalOpt is the number of players minus the minumum number for each role
+        aantalOpt = neededRoles;
+        // Now we don't have need for more optional roles
+        neededRoles = 0;
+      }
+
+      // First give all the mandatory roles
+      for (let i = 0; i < aantalMin; i++) {
+        playersAlive[playerIndex++].rol = rolNaam;
+      }
+
+      // Store the optional roles for later use
+      for (let i = 0; i < aantalOpt; i++) {
+        optionals.push(rolNaam);
       }
     }
+
+    // shuffle the remaining roles
+    helpers.shuffle(optionals);
+
+    for (const player of playersAlive) {
+      if (!player.rol && optionals.length > 0) {
+        player.rol = optionals.pop();
+      } else if (!player.rol && optionals.length == 0) {
+        // We don't have enough roles for all the players
+        throw `${t('TEXTNOTENOUGHROLES')}`;
+      }
+    }
+
     const rolLijst = [];
     for (const player of playersAlive) {
       await helpers.sendIM(
