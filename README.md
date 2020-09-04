@@ -48,7 +48,7 @@ https://1drv.ms/w/s!AjgzSBmd1PZUhcxdH5OCI-CUCAPDDg?e=qgeq05
 
 ## Credit
 
-Dolfje is gemaakt door foaly met vertaalhulp van Maikel en testhulp van Thijs, Gerine, Ferry en deWiskeyNerd (aka deVerteller).
+Dolfje is gemaakt door foaly, Martin en Vincent met vertaalhulp van Maikel en testhulp van Thijs, Gerine, Ferry en deWiskeyNerd (aka deVerteller).
 Je kunt ons vinden op onze weerwolf slack https://mnot.nl/weerwolvenslack
 Heb je vragen, tips, opmeringen, suggesties of wil je iets anders over Dolfje kwijt mag je op die Slack altijd foaly DMen!
 Wil je je dankbaarheid tonen, mag je altijd een kop thee voor me kopen ;) https://paypal.me/foaly
