@@ -106,7 +106,9 @@ async function status({ command, ack, say }) {
           case 'REGISTERING':
             returnText += `${i + 1}. \t ${state[i].gms_name} \t ${t('TEXTOPENREGISTRATION')} ${t(
               'COMMANDIWILLJOIN'
-            )} ${t('TEXTREGISTER')} ${state[i].players} ${t('TEXTVIEWING')} ${state[i].viewers} \n`;
+            )} ${t('TEXTTOVIEW')} ${t(
+              'COMMANDIWILLVIEW'
+            )}. ${t('TEXTREGISTER')} ${state[i].players} ${t('TEXTVIEWING')} ${state[i].viewers} \n`;
             break;
           case 'STARTED':
             returnText += `${i + 1}. \t ${state[i].gms_name} \t ${t('TEXTGAMESTARTED')} ${state[i].alive} ${t(
@@ -430,10 +432,10 @@ async function startRegistratie({ command, ack, say }) {
   try {
     params = command.text.trim().split(' ');
     const activeGames = await queries.getActiveGameName();
-    if (params.length !== 4) {
-      const warning = `${t('TEXTFOURPARAMETERSNEEDED')} ${t('COMMANDSTARTREGISTRATION')} [${t('TEXTPASSWORD')}] [${t(
+    if (params.length !== 3) {
+      const warning = `${t('TEXTTHREEPARAMETERSNEEDED')} ${t('COMMANDSTARTREGISTRATION')} [${t('TEXTPASSWORD')}] [${t(
         'TEXTVOTESTYLE'
-      )}] [${t('TEXTGAMENAME')}] [${t('TEXTREVIVEABLE')}]`;
+      )}] [${t('TEXTREVIVEABLE')}]`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
@@ -447,15 +449,15 @@ async function startRegistratie({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-    if (activeGames.includes(params[2])) {
-      const warning = `${t('TEXTCOMMANDERROR')} ${t('COMMANDSTARTREGISTRATION')}: ${t('TEXTDUPLICATENAME')}`;
-      await helpers.sendIM(client, command.user_id, warning);
-      return;
-    }
+    const lastGameName = await queries.getLastGameName();
+    const gameName = `ww${parseInt(lastGameName[0].gms_name.substring(2)) +1}`;
     const userName = await helpers.getUserName(client, command.user_id);
-    const result = await queries.createNewGame(params[1], params[2], params[3], command.user_id, userName);
+    const result = await queries.createNewGame(params[1], gameName, params[2], command.user_id, userName);
     if (result.succes) {
-      say({
+      await client.chat.postMessage({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: process.env.REG_CHANNEL,
+        user: command.user_id, 
         blocks: [
           {
             type: 'section',
@@ -497,10 +499,16 @@ async function startSpel({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-
+    let channelName;
+    const regexName = /^ww[0-9].*/;
+    if (regexName.test(params[2]) === false) {
+      channelName = `${game.gms_name.toLowerCase().split(' ').join('_')}_${params[2].toLowerCase()}`;
+    } else {
+      channelName = params[2].toLowerCase();
+    }
     const hoofdkanaal = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
-      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${params[2].toLowerCase()}`,
+      name: channelName,
       is_private: true,
     });
 
@@ -580,7 +588,7 @@ async function startSpel({ command, ack, say }) {
         let temp = usersList.filter((y) => y.id == result.playerList[i].gpl_slack_id);
         returnText += `${temp[0].name}\n`;
       }
-      client.chat.postMessage({
+      await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: hoofdkanaal.channel.id,
         user: command.user_id,
@@ -654,46 +662,64 @@ async function stopSpel({ command, ack, say }) {
 async function createChannel({ command, ack, say }) {
   ack();
   try {
-    const game = await queries.getActiveGameWithChannel(command.channel_id);
+    const games = await queries.getActiveGameUser(command.user_id);
     params = command.text.trim().split(' ');
     if (params.length !== 1) {
       const warning = `${t('TEXTONEPARAMETERNEEDED')} ${t('COMMANDCREATECHANNEL')} [${t('TEXTNAMECHANNEL')}]`;
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-    const alleVertellers = await queries.getVertellers(game.gms_id);
-    if (!alleVertellers.includes(command.user_id)) {
-      alleVertellers.push(command.user_id);
-    }
-    let channelName;
-    if (/^ww[0-9].*/.test(params[0]) === false) {
-      channelName = `${game.gms_name.toLowerCase().split(' ').join('_')}_${params[0].toLowerCase()}`;
+    if (games.length == 1) {
+      await actions.createNewChannelFunction(games[0].gms_id, command.user_id, params[0], 0,0, true);
+    } else if (games.length > 0) {
+      const im = await client.conversations.open({
+        token: process.env.SLACK_BOT_TOKEN,
+        users: command.user_id,
+      });
+      let buttonElements = [
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: `${t('TEXTCLOSEMESSAGE')}`,
+          },
+          value: 'Close',
+          action_id: `delete-${command.channel_id}`,
+        },
+      ];
+      for (const game of games) {
+        buttonElements.push({
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: game.gms_name,
+          },
+          value: params[0].toString(),
+          action_id: `kanaal-${game.gms_id}`,
+        });
+      }
+      let buttonblocks = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${t('TEXTCLICKGAME')} ${t('TEXTCLICKCHANNEL')}`,
+          },
+        },
+        {
+          type: 'actions',
+          elements: buttonElements,
+        },
+      ];
+      await client.chat.postMessage({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: im.channel.id,
+        user: command.user_id,
+        blocks: buttonblocks,
+      });
     } else {
-      channelName = params[0].toLowerCase();
+      throw 'Je doet niet mee aan een actief spel';
     }
-    const kanaal = await client.conversations.create({
-      token: process.env.SLACK_BOT_TOKEN,
-      name: channelName,
-      is_private: true,
-    });
-    await client.conversations.invite({
-      token: process.env.SLACK_BOT_TOKEN,
-      channel: kanaal.channel.id,
-      users: alleVertellers.join(','),
-    });
-    await client.chat.postMessage({
-      token: process.env.SLACK_BOT_TOKEN,
-      channel: kanaal.channel.id,
-      text: `${await helpers.getUserName(client, command.user_id)} ${t('TEXTCREATEDCHANNEL')}`,
-    });
-    const kanaalInput = {
-      gch_id: game.gms_id,
-      gch_slack_id: kanaal.channel.id,
-      gch_name: kanaal.channel.name,
-      gch_type: channelType.standard,
-      gch_user_created: command.user_id,
-    };
-    await queries.logChannel(kanaalInput);
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDCREATECHANNEL')}: ${error}`);
   }
@@ -793,7 +819,7 @@ async function extraVerteller({ command, ack, say }) {
       await actions.vertellerToevoegenFunction(
         vertellerId,
         command.user_id,
-        command.channel_id,
+        process.env.REG_CHANNEL, 
         games[0].gms_id,
         0,
         0,
@@ -869,9 +895,9 @@ async function nodigVertellersUit({ command, ack, say }) {
         users: uitTeNodigen.join(','),
       });
       const kanaalInput = {
-        gch_id: game[0].gms_id,
+        gch_gms_id: game[0].gms_id,
         gch_slack_id: command.channel_id,
-        gch_name: channel.channel.name,
+        gch_name: command.channel_name,
         gch_type: channelType.standard,
         gch_user_created: command.user_id,
       };
@@ -1120,7 +1146,7 @@ async function verdeelRollen({ command, ack, say }) {
     //       return;
     //     }
 
-    const playersAlive = await queries.getAlive();
+    const playersAlive = await queries.getAlive(game.gms_id);
     helpers.shuffle(playersAlive);
     let neededRoles = playersAlive.length;
     let playerIndex = 0;

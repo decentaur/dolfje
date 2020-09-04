@@ -2,6 +2,7 @@ const mysql = require('mysql2');
 const { t } = require('localizify');
 
 module.exports = {
+  getLastGameName,
   createNewGame,
   startGame,
   stopGame,
@@ -41,6 +42,7 @@ module.exports = {
   getRules,
   logChannel,
   getChannel,
+  logArchiveChannel,
   getAllChannels,
   messageCountPlusPlus,
 };
@@ -71,6 +73,17 @@ const pollStates = {
   open: 'OPEN',
   closed: 'CLOSED',
 };
+
+async function getLastGameName() {
+  try {
+    const gameName = await promisePool.query(
+      `SELECT gms_name FROM games WHERE gms_id = (SELECT MAX(gms_id) FROM games)`
+    );
+    return gameName[0];
+  } catch (err) {
+    console.log(err);
+  }
+}
 
 async function createNewGame(voteStyle, gameName, revivable, userId, userName) {
   try {
@@ -391,6 +404,7 @@ async function startPoll(gameId, voteName) {
 
 async function getPollName(gameId) {
   const poll = await getPoll(gameId);
+  const game = await getSpecificGame(gameId);
   return `Stemming ${poll.gpo_number + 1} voor spel ${game.gms_name}`;
 }
 
@@ -511,7 +525,8 @@ async function getAlive(gameId) {
       from game_players
       where gpl_gms_id = ?
       and gpl_status = ? 
-      and gpl_drawn`,
+      and gpl_drawn
+      order by rand()`,
     [gameId, playerStates.alive]
   );
   return rows;
@@ -641,13 +656,15 @@ async function getSpecificGame(gameId) {
 
 async function getGameRegisterUser(userId) {
   const [rows] = await promisePool.query(
-    `select * 
+    `select  *
       from games
-      left join (select * from game_players where gpl_slack_id = ?) as gpl
-      on gpl_gms_id = gms_id
       where gms_status = ?
-      and (gpl_status IS NULL or gpl_status = ?)`,
-    [userId, gameStates.registering, playerStates.viewer]
+      and not exists (select 'is verteller or player'
+                    from game_players
+                    where gpl_gms_id = gms_id
+                    and gpl_slack_id = ?
+                    and gpl_status <> ?)`,
+    [gameStates.registering, userId, playerStates.viewer]
   );
   return rows;
 }
@@ -668,32 +685,37 @@ async function getGameUnregisterUser(userId) {
 
 async function getGameOpenUser(userId) {
   const [rows] = await promisePool.query(
-    `select * 
-    from games
-    left join (select * from game_players where gpl_slack_id = ?) as gpl
-    on gpl_gms_id = gms_id
-    where gms_status <> ? 
-    and gpl_drawn is null or !gpl_drawn
-    and gpl_status <> ? 
-    and gpl_status <> ?`,
-    [userId, gameStates.ended, playerStates.viewer, playerStates.verteller]
+    `select *
+      from games
+      left join game_players gpl
+        on gpl_gms_id = gms_id
+        and gpl_slack_id = ?
+        and (gpl_status in (?, ?)
+    	        or gpl_drawn)
+      where gms_status <> ?
+        and gpl_status is null`,
+    [userId, playerStates.viewer, playerStates.verteller, gameStates.ended]
   );
   return rows;
 }
 
 async function getGameVerteller(userId, vertellerId) {
   const [rows] = await promisePool.query(
-    `SELECT  * 
-      FROM games
-      LEFT JOIN (SELECT * FROM game_players WHERE gpl_slack_id = ?) AS gpl
-      ON gpl.gpl_gms_id = gms_id 
-      AND gms_status <> ?
-      LEFT JOIN (SELECT * FROM game_players WHERE gpl_slack_id = ?) AS gpl2
-      ON gpl2.gpl_gms_id= gms_id 
-      WHERE gpl2.gpl_status <> ? OR gpl2.gpl_status IS NULL 
-    AND !gpl2.gpl_drawn OR gpl2.gpl_drawn IS NULL
-    and gpl.gpl_leader`,
-    [userId, gameStates.ended, vertellerId, playerStates.verteller]
+    `SELECT  *
+    FROM games
+    WHERE gms_status <> ?
+    and exists (select 'is verteller'
+            from game_players
+            where gpl_gms_id = gms_id
+            and gpl_slack_id = ?
+            and gpl_leader
+            )			
+    and not exists (select 'is verteller or player'
+            from game_players
+            where gpl_gms_id = gms_id
+            and gpl_slack_id = ?
+            and (gpl_leader or gpl_drawn))`,
+    [gameStates.ended, userId, vertellerId]
   );
   return rows;
 }
@@ -833,7 +855,7 @@ async function logChannel(logInput) {
     `insert into game_channels
       (gch_gms_id, gch_slack_id, gch_name, gch_type, gch_user_created)
         values(?,?,?,?,?)`,
-    [logInput.gch_id, logInput.gch_slack_id, logInput.gch_name, logInput.gch_type, logInput.gch_user_created]
+    [logInput.gch_gms_id, logInput.gch_slack_id, logInput.gch_name, logInput.gch_type, logInput.gch_user_created]
   );
 }
 
@@ -845,8 +867,16 @@ async function getChannel(gameId, channelType) {
   return rows[0].gch_slack_id;
 }
 
+async function logArchiveChannel(channelId) {
+  try {
+    await promisePool.query(`update game_channels set gch_archived = TRUE WHERE gch_slack_id = ?`, [channelId]); 
+  } catch (error) {
+    console.log(error)
+  }
+}
+
 async function getAllChannels(gameId) {
-  const [rows] = await promisePool.query(`select gch_slack_id, gch_name from game_channels where gch_gms_id = ?`, [
+  const [rows] = await promisePool.query(`select gch_slack_id, gch_name from game_channels where gch_gms_id = ? and !gch_archived`, [
     gameId,
   ]);
   return rows;

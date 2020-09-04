@@ -16,6 +16,7 @@ async function addMessages(app) {
   app.message(regexStop, stopStemming);
   app.message(regexHerinner, herinnerStemmers);
   app.message(/.*/, registerMessage);
+  app.event('group_archive', registerArchive);
 }
 
 async function appMention({ message, say }) {
@@ -23,7 +24,7 @@ async function appMention({ message, say }) {
     token: process.env.SLACK_BOT_TOKEN,
     channel: message.channel,
     user: message.user,
-    text: `Hey stop met me @-mentionen, ik heb geen idee wat ik daar mee aan moet...`
+    text: `Hey stop met me @-mentionen, ik heb geen idee wat ik daar mee aan moet...`,
   });
 }
 
@@ -32,15 +33,15 @@ async function startStemming({ message, say }) {
     return;
   }
   try {
-    const game = await queries.getActiveGameWithChannel(message.channel.id);
+    const game = await queries.getActiveGameWithChannel(message.channel);
     const channelUsersList = await helpers.getUserlist(client, message.channel);
     const pollName = await queries.getPollName(game.gms_id);
     const playersAlive = await queries.getAlive(game.gms_id);
-    const channelUsersAlive = channelUsersList.filter(x => playersAlive.map(y => y.user_id).includes(x.id));
+    const channelUsersAlive = channelUsersList.filter((x) => playersAlive.map((y) => y.user_id).includes(x.id));
     if (!channelUsersAlive) {
       throw 'Er zijn geen spelers waarop gestemd kan worden, poll is niet gestart';
     }
-    await queries.startPoll(pollName);
+    await queries.startPoll(game.gms_id, pollName);
 
     const chuckedUsersAlive = [];
     while (channelUsersAlive.length) {
@@ -52,32 +53,32 @@ async function startStemming({ message, say }) {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: pollName
-        }
-      }
+          text: pollName,
+        },
+      },
     ];
     for (const channelChunk of chuckedUsersAlive)
       buttonblocks = buttonblocks.concat([
         {
           type: 'actions',
-          elements: channelChunk.map(x => ({
+          elements: channelChunk.map((x) => ({
             type: 'button',
             text: {
               type: 'plain_text',
-              text: x.name
+              text: x.name,
             },
             value: x.id,
-            action_id: `stem-${x.id}`
-          }))
-        }
+            action_id: `stem-${x.id}`,
+          })),
+        },
       ]);
 
     const chatMessage = await client.chat.postMessage({
       token: process.env.SLACK_BOT_TOKEN,
       channel: message.channel,
-      blocks: buttonblocks
+      blocks: buttonblocks,
     });
-    await queries.setMessageIdPoll(chatMessage);
+    await queries.setMessageIdPoll(game.gms_id, chatMessage);
   } catch (error) {
     console.log(`Er ging iets mis met automagisch starten stem ronde: ${error}`);
   }
@@ -88,10 +89,10 @@ async function stopStemming({ message, say }) {
     return;
   }
   try {
-    const game = await queries.getActiveGameWithChannel(message.channel.id);
+    const game = await queries.getActiveGameWithChannel(message.channel);
     const channelUsersList = await helpers.getUserlist(client, message.channel);
     const playersAlive = await queries.getAlive(game.gms_id);
-    const channelUsersAlive = channelUsersList.filter(x => playersAlive.map(y => y.user_id).includes(x.id));
+    const channelUsersAlive = channelUsersList.filter((x) => playersAlive.map((y) => y.user_id).includes(x.id));
 
     const poll = await queries.stopPoll(game.gms_id);
     const pollResults = await queries.getPollResults(poll);
@@ -108,14 +109,14 @@ async function stopStemming({ message, say }) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${poll.gpo_title} is gesloten, uitslag volgt`
-          }
-        }
-      ]
+            text: `${poll.gpo_title} is gesloten, uitslag volgt`,
+          },
+        },
+      ],
     });
     const mayorId = channelUsersAlive
-      .filter(x => x.status === 'Burgemeester')
-      .map(y => y.id)
+      .filter((x) => x.status === 'Burgemeester')
+      .map((y) => y.id)
       .join();
     for (const playerAlive of channelUsersAlive) {
       for (const pollResult of pollResults) {
@@ -148,7 +149,7 @@ async function herinnerStemmers({ message, say }) {
     return;
   }
   try {
-    const game = await queries.getActiveGameWithChannel(message.channel.id);
+    const game = await queries.getActiveGameWithChannel(message.channel);
     const time = message.text.match(/.*herinner.*\[(.*)\].*/)[1];
     const playersNotVoted = await queries.getAliveNotVoted(game.gms_id);
     const stemMessage = `Je hebt nog niet gestemd, je hebt tot ${time} om te stemmen, stemmen is verplicht`;
@@ -161,10 +162,10 @@ async function herinnerStemmers({ message, say }) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `Ok <@${message.user}>, ik heb ${playersNotVoted.length} stemherinneringen verstuurd`
-          }
-        }
-      ]
+            text: `Ok <@${message.user}>, ik heb ${playersNotVoted.length} stemherinneringen verstuurd`,
+          },
+        },
+      ],
     });
   } catch (error) {
     console.log(`Er ging iets mis met automagische stemherinnering: ${error}`);
@@ -172,6 +173,18 @@ async function herinnerStemmers({ message, say }) {
 }
 
 async function registerMessage({ message, say }) {
-  const game = await queries.getActiveGameWithChannel(message.channel);
+  try {
+    const game = await queries.getActiveGameWithChannel(message.channel);
   await queries.messageCountPlusPlus(message.user, game.gms_id);
+  } catch (error) {
+    return
+  }
+}
+
+async function registerArchive({event, context}) {
+  try {
+    await queries.logArchiveChannel(event.channel);
+  } catch (error) {
+    console.log(`Er ging iets mis met het registeren van het archiveren van een kanaal: ${error}`);
+  }
 }
