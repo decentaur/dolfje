@@ -54,6 +54,7 @@ CREATE TABLE `game_rules` (
   `gch_slack_id` varchar(255),
   `gch_name` varchar(255),
   `gch_type` varchar(255),
+  `gch_archived` tinyint(1) DEFAULT '0',
   `gch_user_created` varchar(255),
   `gch_created_at` timestamp,
   PRIMARY KEY (`gch_gms_id`, `gch_slack_id`)
