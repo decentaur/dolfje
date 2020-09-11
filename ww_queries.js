@@ -45,6 +45,10 @@ module.exports = {
   logArchiveChannel,
   getAllChannels,
   messageCountPlusPlus,
+  storeMessage,
+  threatIdsInChannelByDate,
+  nonThreadedMessagesInChannelByDate,
+  threadedMessagesInChannelByTS
 };
 
 const pool = mysql.createPool({
@@ -881,3 +885,70 @@ async function getAllChannels(gameId) {
   ]);
   return rows;
 }
+
+async function storeMessage(channelId, userId, ts, blocks, files, threatTs) {
+  // Get channel type
+  const [rows] = await promisePool.query(`select gch_type from game_channels where gch_slack_id = ?`, [channelId]);
+  if (rows.length == 0 || rows[0].gch_type !== "MAIN") {
+    return false;
+  }
+
+  // Store the message
+  const result = await promisePool.query(
+    `insert into game_public_messages 
+    (gpm_gch_slack_id, gpm_gpl_slack_id, gpm_slack_ts, gpm_blocks, gpm_files, gpm_thread_ts)
+    values (?, ?, ?, ?, ?, ?)`,
+    [channelId, userId, ts, blocks, files, threatTs]
+  );
+  return result;
+}
+
+
+async function threatIdsInChannelByDate(channelId, startDate, endDate) {
+  // Time
+  const dateStart = startDate + " 00:00:00";
+  const dateEnd = endDate  + " 23:59:59";
+
+  // Get thread IDs
+  const [rows] = await promisePool.query(
+    `SELECT distinct(gpm_thread_ts) FROM game_public_messages 
+    WHERE gpm_thread_ts is not null AND
+    gpm_created_at >= ? AND
+    gpm_created_at < ?`, [dateStart, dateEnd]);
+    return rows;
+  }
+
+  async function nonThreadedMessagesInChannelByDate(channelId, startDate, endDate) {
+    // Time
+    const dateStart = startDate + " 00:00:00";
+    const dateEnd = endDate  + " 23:59:59";
+    
+    //
+    const [rows] = await promisePool.query(
+      `SELECT gpm_slack_ts, gpl_name, gpm_blocks, gpm_files, gpm_thread_ts, gpm_created_at, gch_gms_id
+      FROM game_public_messages gpm
+        LEFT JOIN game_channels gch ON gpm.gpm_gch_slack_id = gch.gch_slack_id
+          LEFT JOIN game_players gpl ON gpm.gpm_gpl_slack_id = gpl.gpl_slack_id AND gpl.gpl_gms_id = gch.gch_gms_id
+      WHERE 
+        gpm_gch_slack_id = ? AND
+        gpm_thread_ts is null AND
+        gpm_created_at >= ? AND
+        gpm_created_at < ?`,
+      [channelId, dateStart, dateEnd]);
+    return rows;
+  }
+ 
+  async function threadedMessagesInChannelByTS(channelId, ts) {
+    
+    //
+    const [rows] = await promisePool.query(
+      `SELECT gpm_slack_ts, gpl_name, gpm_blocks, gpm_files, gpm_thread_ts, gpm_created_at, gch_gms_id
+      FROM game_public_messages gpm
+        LEFT JOIN game_channels gch ON gpm.gpm_gch_slack_id = gch.gch_slack_id
+          LEFT JOIN game_players gpl ON gpm.gpm_gpl_slack_id = gpl.gpl_slack_id AND gpl.gpl_gms_id = gch.gch_gms_id
+      WHERE 
+        gpm_gch_slack_id = ? AND
+        gpm_thread_ts = ?`,
+      [channelId, ts]);
+    return rows;
+  }

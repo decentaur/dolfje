@@ -176,6 +176,23 @@ async function registerMessage({ message, say }) {
   try {
     const game = await queries.getActiveGameWithChannel(message.channel);
   await queries.messageCountPlusPlus(message.user, game.gms_id);
+  const threadTs = (!("thread_ts" in message)) ? null : message.thread_ts ;
+  const blocks = (!("blocks" in message)) ? null : JSON.stringify(message.blocks[0]);
+  let files = null; 
+
+  if ("files" in message){
+    files = [];
+    for (const file of message.files){
+      files.push(`Image: <${file.permalink}|${file.title}>`);
+    }
+    files = files.join("\n");
+  }
+
+  try{
+    await queries.storeMessage(message.channel, message.user, message.ts, message.text, files, threadTs)
+  } catch (error) {
+    console.log(`Er ging iets mis met het opslaan van de message: ${error}`);
+  }
   } catch (error) {
     return
   }

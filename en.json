@@ -23,6 +23,7 @@
   "COMMANDGIVEROLES": "/wwgiveroles",
   "COMMANDLOTTO": "/wwlotto",
   "COMMANDHELP": "/wwhelp",
+  "COMMANDSUMMARIZE": "/wwsummarize",
   "TEXTGAMENOTFOUND": "The game cannot be found",
   "TEXTALIVE": "alive",
   "TEXTLIVING": "Living",

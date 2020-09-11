@@ -23,6 +23,7 @@
   "COMMANDGIVEROLES": "/wwverdeelrollen",
   "COMMANDLOTTO": "/wwlotto",
   "COMMANDHELP": "/wwhelp",
+  "COMMANDSUMMARIZE": "/wwsamenvatting",
   "TEXTGAMENOTFOUND": "Het spel kon niet gevonden worden",
   "TEXTALIVE": "levend",
   "TEXTLIVING": "Levenden",

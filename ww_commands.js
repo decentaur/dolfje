@@ -38,6 +38,7 @@ function addCommands(app) {
   app.command(t('COMMANDGIVEROLES'), verdeelRollen);
   app.command(t('COMMANDLOTTO'), lotto);
   app.command(t('COMMANDHELP'), help);
+  app.command(t('COMMANDSUMMARIZE'), summarize);
 }
 
 async function channelList({ command, ack, say }) {
@@ -1254,5 +1255,107 @@ async function lotto({ command, ack, say }) {
     }
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDLOTTO')}: ${error}`);
+  }
+}
+
+async function summarize({ command, ack, say }) {
+  ack();
+
+  try {
+    // Only a moderator can give this command
+    const game = await queries.getActiveGameWithChannel(command.channel_id);
+    if (!(await queries.isVerteller(game.gms_id, command.user_id))) {
+      const warning = `${t('TEXTONLYMODERATORROLES')}`;
+      await helpers.sendIM(client, command.user_id, warning);
+      return;
+    }
+    const params = command.text.trim().split(' ');
+    const regex = /202[0-9]-[0-1][0-9]-[0-3][0-9]/gm;
+    if(regex.exec(params[0]) === null) {
+      throw "Date is invalid, format is yyyy-mm-dd";
+    }
+    if(params.length < 2){
+      params[1] = params[0]
+    } else {
+      if(regex.exec(params[1]) === null) {
+        throw "Date is invalid, format is yyyy-mm-dd";
+      }
+    }
+
+    const threads = await queries.threatIdsInChannelByDate(command.channel_id, params[0], params[1]);
+    const threadIds = threads.map(x => x.gpm_thread_ts);
+    let ids = JSON.stringify(threadIds);
+
+    const ntMessages = await queries.nonThreadedMessagesInChannelByDate(command.channel_id, params[0], params[1]);
+    let tMessages = {} 
+
+    let summary = [];
+    let lastUser = null;
+    let lastTime = new Date(0);
+    let newTime = null;
+    let threadBlock = {};
+
+    // Loop through all the non-threaded messages (or the original post of a thread)
+    for (const message of ntMessages) {
+      newTime = new Date(message.gpm_created_at);
+
+      // If the post is written by a different user (than the prev. post) or there is more than a minute between posts write a "header"
+      if (message.gpl_name !== lastUser || newTime-lastTime > (1*60*1000) ){
+        lastUser = message.gpl_name;
+        lastTime = newTime;
+        summary.push({
+            "type": "context",
+            "elements": [
+              {
+                "type": "mrkdwn",
+                "text": `*${message.gpl_name}* (${newTime.toLocaleTimeString()})`
+              }
+            ]
+          });
+      }
+
+      // If the post contains text (and not only an image) write the message
+      if(message.gpm_blocks !== ""){
+        summary.push({
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": `${message.gpm_blocks}`
+          }
+        })
+      }
+
+      // If the post contains an image, write a link to that message
+      if(message.gpm_files !== null){
+        let files = JSON.parse(message.gpm_files);
+        for (file of files) {
+          summary.push(file);
+        }
+      }
+
+      // Post threaded messages
+      if(message.ts in threadIds){
+        threadBlock = {"type": "section", "fields": [] };
+        tMessages = await queries.threadedMessagesInChannelByTS(command.channel_id, message.ts);
+
+        for(const tMessage of tMessages){
+          threadBlock.fields.push({
+            "type": "mrkdwn",
+            "text": `_${message.gpl_name}_`
+          });
+          threadBlock.fields.push({
+            "type": "mrkdwn",
+            "text": `_${message.gpm_blocks}_`
+          });
+        }
+        summary.push(threadBlock);
+      }
+    }
+    say({
+      blocks: summary
+    })
+
+  } catch (error) {
+    await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDSUMMARIZE')}: ${error}`);
   }
 }
