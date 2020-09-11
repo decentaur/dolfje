@@ -889,7 +889,7 @@ async function getAllChannels(gameId) {
 async function storeMessage(channelId, userId, ts, blocks, files, threatTs) {
   // Get channel type
   const [rows] = await promisePool.query(`select gch_type from game_channels where gch_slack_id = ?`, [channelId]);
-  if (rows.length == 0 || rows[0].gch_type !== "MAIN") {
+  if (rows.length == 0) {
     return false;
   }
 
