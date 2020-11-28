@@ -73,3 +73,24 @@ ALTER TABLE `game_votes` ADD FOREIGN KEY (`gvo_gpl_gms_id`, `gvo_gpl_slack_id`) 
 ALTER TABLE `game_votes` ADD FOREIGN KEY (`gvo_voted_on_gpl_gms_id`, `gvo_voted_on_gpl_slack_id`) REFERENCES `game_players` (`gpl_gms_id`, `gpl_slack_id`);
 
 ALTER TABLE `game_channels` ADD FOREIGN KEY (`gch_gms_id`) REFERENCES `games` (`gms_id`);
+
+-- The following table is added for logging messages in the main channel(s)
+CREATE TABLE `game_public_messages` (
+  `gpm_gch_gms_id` int,
+  `gpm_gch_slack_id` varchar(255),
+  `gpm_gpl_gms_id` int,
+  `gpm_gpl_slack_id` varchar(255),
+  `gpm_slack_ts` varchar(255),
+  `gpm_blocks` TEXT(65000),
+  `gpm_files` TEXT(65000),
+  `gpm_thread_ts` varchar(255),
+  `gpm_created_at` timestamp,
+  PRIMARY KEY (`gpm_gch_slack_id`, `gpm_slack_ts`)
+);
+
+
+CREATE INDEX gpm_thread_ts ON game_public_messages(`gpm_slack_ts`);
+
+ALTER TABLE `game_public_messages` ADD FOREIGN KEY (`gpm_gch_gms_id`,`gpm_gch_slack_id`) REFERENCES `game_channels` (`gch_gms_id`,`gch_slack_id`);
+ALTER TABLE `game_public_messages` ADD FOREIGN KEY (`gpm_gpl_gms_id`,`gpm_gpl_slack_id`) REFERENCES `game_players` (`gpl_gms_id`,`gpl_slack_id`);
+ALTER TABLE `game_public_messages` ADD FOREIGN KEY (`gpm_thread_ts`) REFERENCES `game_public_messages` (`gpm_slack_ts`);

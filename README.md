@@ -4,10 +4,14 @@ Deze bot is geschreven om het weerwolven spel op de MNOT weerwolven slack te beg
 Wij spelen het spel met een (of meerdere) verteller(s) die het spel leiden.
 Speel een keer mee op https://mnot.nl/weerwolvenslack !
 
+## Let op!
+
+Voor nieuwe features wordt regelmatig het database schema bijgewerkt, controleer in wwmnot.sql of je alle tabellen en kolommen daarin hebt.
+
 ## Installatie handleiding
 
 Dolfje is als klein project begonnen en beetje uit de hand gelopen.
-Het ondersteund maar 1 spel en 1 Slack te tegelijkertijd, als je dus ook van Dolfje gebruik wilt maken zal je het zelf moeten hosten.
+Het ondersteund meerdere spellen, maar maar 1 Slack te tegelijkertijd, als je dus ook van Dolfje gebruik wilt maken zal je het zelf moeten hosten.
 Hieronder een beknopt stappen plan.
 
 ### Maak een nieuwe Slack app
@@ -44,11 +48,11 @@ Draai met NodeJS index.js (ik gebruik hiervoor de pm2 proces manager)
 ## Handleidng
 
 De gebruikershandleiding kan je hier vinden:
-https://1drv.ms/w/s!AjgzSBmd1PZUhcxdH5OCI-CUCAPDDg?e=qgeq05
+https://metnerdsomtafel.nl/wwwiki/index.php/Dolfje
 
 ## Credit
 
-Dolfje is gemaakt door foaly, Martin en Vincent met vertaalhulp van Maikel en testhulp van Thijs, Gerine, Ferry en deWiskeyNerd (aka deVerteller).
+Dolfje is gemaakt door foaly, Martin en Vincent met vertaalhulp van Maikel en testhulp van oa Thijs, Gerine, Ferry en deWiskeyNerd (aka deVerteller).
 Je kunt ons vinden op onze weerwolf slack https://mnot.nl/weerwolvenslack
 Heb je vragen, tips, opmeringen, suggesties of wil je iets anders over Dolfje kwijt mag je op die Slack altijd foaly DMen!
 Wil je je dankbaarheid tonen, mag je altijd een kop thee voor me kopen ;) https://paypal.me/foaly

@@ -38,6 +38,7 @@ function addCommands(app) {
   app.command(t('COMMANDGIVEROLES'), verdeelRollen);
   app.command(t('COMMANDLOTTO'), lotto);
   app.command(t('COMMANDHELP'), help);
+  app.command(t('COMMANDSUMMARIZE'), summarize);
 }
 
 async function channelList({ command, ack, say }) {
@@ -106,9 +107,9 @@ async function status({ command, ack, say }) {
           case 'REGISTERING':
             returnText += `${i + 1}. \t ${state[i].gms_name} \t ${t('TEXTOPENREGISTRATION')} ${t(
               'COMMANDIWILLJOIN'
-            )} ${t('TEXTTOVIEW')} ${t(
-              'COMMANDIWILLVIEW'
-            )}. ${t('TEXTREGISTER')} ${state[i].players} ${t('TEXTVIEWING')} ${state[i].viewers} \n`;
+            )} ${t('TEXTTOVIEW')} ${t('COMMANDIWILLVIEW')}. ${t('TEXTREGISTER')} ${state[i].players} ${t(
+              'TEXTVIEWING'
+            )} ${state[i].viewers} \n`;
             break;
           case 'STARTED':
             returnText += `${i + 1}. \t ${state[i].gms_name} \t ${t('TEXTGAMESTARTED')} ${state[i].alive} ${t(
@@ -199,10 +200,14 @@ async function archiveren({ command, ack, say }) {
     const game = await queries.getGameName(params[1]);
     const channelList = await queries.getAllChannels(game.gms_id);
     for (const oneChannel of channelList) {
-      await client.conversations.archive({
-        token: process.env.SLACK_BOT_TOKEN,
-        channel: oneChannel.gch_slack_id,
-      });
+      try {
+        await client.conversations.archive({
+          token: process.env.SLACK_BOT_TOKEN,
+          channel: oneChannel.gch_slack_id,
+        });
+      } catch (error) {
+        await helpers.sendIM(client, command.user_id, `${t('TEXTARCHIVEERROR')}: ${oneChannel.gch_name} (${error}`);
+      }
     }
     await helpers.sendIM(client, command.user_id, `${game.gms_name} ${t('TEXTARCHIVED')}`);
   } catch (error) {
@@ -450,14 +455,14 @@ async function startRegistratie({ command, ack, say }) {
       return;
     }
     const lastGameName = await queries.getLastGameName();
-    const gameName = `ww${parseInt(lastGameName[0].gms_name.substring(2)) +1}`;
+    const gameName = `ww${parseInt(lastGameName[0].gms_name.substring(2)) + 1}`;
     const userName = await helpers.getUserName(client, command.user_id);
     const result = await queries.createNewGame(params[1], gameName, params[2], command.user_id, userName);
     if (result.succes) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: process.env.REG_CHANNEL,
-        user: command.user_id, 
+        user: command.user_id,
         blocks: [
           {
             type: 'section',
@@ -635,21 +640,8 @@ async function stopSpel({ command, ack, say }) {
     }
     const result = await queries.stopGame(game.gms_id);
     if (result.succes) {
-      const allGames = await queries.getAllChannels(game.gms_id);
-      for (const singleChannel of allGames) {
-        const spelers = await queries.getEveryOne(game.gms_id);
-        const channelUsersList = await helpers.getUserlist(client, singleChannel.gch_slack_id);
-        const uitTeNodigen = spelers.filter((x) => !channelUsersList.map((y) => y.id).includes(x.user_id));
-        if (!uitTeNodigen.length) {
-          await helpers.sendIM(client, command.user_id, `${singleChannel.gch_name}: ${t('TEXTALLINVITED')}`);
-        } else {
-          await client.conversations.invite({
-            token: process.env.SLACK_BOT_TOKEN,
-            channel: command.channel_id,
-            users: uitTeNodigen.map((x) => x.user_id).join(','),
-          });
-        }
-      }
+      const allChannels = await queries.getAllChannels(game.gms_id);
+      helpers.inviteEveryone(client, command, game, queries, t, allChannels);
       await helpers.sendIM(client, command.user_id, `${game.gms_name} ${t('TEXTGAMECLOSED')}`);
     } else {
       await helpers.sendIM(client, command.user_id, result.error);
@@ -670,7 +662,7 @@ async function createChannel({ command, ack, say }) {
       return;
     }
     if (games.length == 1) {
-      await actions.createNewChannelFunction(games[0].gms_id, command.user_id, params[0], 0,0, true);
+      await actions.createNewChannelFunction(games[0].gms_id, command.user_id, params[0], 0, 0, true);
     } else if (games.length > 0) {
       const im = await client.conversations.open({
         token: process.env.SLACK_BOT_TOKEN,
@@ -819,7 +811,7 @@ async function extraVerteller({ command, ack, say }) {
       await actions.vertellerToevoegenFunction(
         vertellerId,
         command.user_id,
-        process.env.REG_CHANNEL, 
+        process.env.REG_CHANNEL,
         games[0].gms_id,
         0,
         0,
@@ -1254,5 +1246,130 @@ async function lotto({ command, ack, say }) {
     }
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDLOTTO')}: ${error}`);
+  }
+}
+
+async function summarize({ command, ack, say }) {
+  ack();
+
+  try {
+    // Only a moderator can give this command
+    const game = await queries.getActiveGameWithChannel(command.channel_id);
+    if (!(await queries.isVerteller(game.gms_id, command.user_id))) {
+      const warning = `${t('TEXTONLYMODERATORSUMMARIZE')}`;
+      await helpers.sendIM(client, command.user_id, warning);
+      return;
+    }
+    const params = command.text.trim().split(' ');
+    const regex = /202[0-9]-[0-1][0-9]-[0-3][0-9]/m;
+    if (regex.exec(params[0]) === null) {
+      throw 'Date is invalid, format is yyyy-mm-dd';
+    }
+    if (params.length < 2) {
+      params[1] = params[0];
+    } else {
+      if (regex.exec(params[1]) === null) {
+        throw 'Date is invalid, format is yyyy-mm-dd';
+      }
+    }
+
+    const threads = await queries.threatIdsInChannelByDate(command.channel_id, params[0], params[1]);
+    const threadIds = threads.map((x) => x.gpm_thread_ts);
+    let ids = JSON.stringify(threadIds);
+
+    const ntMessages = await queries.nonThreadedMessagesInChannelByDate(command.channel_id, params[0], params[1]);
+    let tMessages = {};
+
+    let summary = [];
+    let lastUser = null;
+    let lastTime = new Date(0);
+    let newTime = null;
+    let threadBlock = {};
+
+    // Loop through all the non-threaded messages (or the original post of a thread)
+    for (const message of ntMessages) {
+      newTime = new Date(message.gpm_created_at);
+
+      // If the post is written by a different user (than the prev. post) or there is more than a minute between posts write a "header"
+      if (message.gpl_name !== lastUser || newTime - lastTime > 1 * 60 * 1000) {
+        lastUser = message.gpl_name;
+        lastTime = newTime;
+        summary.push({
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `*${message.gpl_name}* (${newTime.toLocaleTimeString()})`,
+            },
+          ],
+        });
+      }
+
+      // If the post contains text (and not only an image) write the message
+      if (message.gpm_blocks !== '') {
+        summary.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${message.gpm_blocks}`,
+          },
+        });
+      }
+
+      // If the post contains an image, write a link to that message
+      if (message.gpm_files !== null) {
+        try {
+          let files = JSON.parse(message.gpm_files);
+          for (file of files) {
+            summary.push(file);
+          }
+        } catch (err) {
+          //not a valid JSON try backup strat
+          try {
+            summary.push({
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: message.gpm_files.match(/<(.*)\|/)[1],
+              },
+            });
+          } catch (err) {
+            summary.push({
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: '<failed loading image>',
+              },
+            });
+          }
+        }
+      }
+
+      // Post threaded messages
+      if (threadIds.includes(message.gpm_slack_ts)) {
+        tMessages = await queries.threadedMessagesInChannelByTS(command.channel_id, message.gpm_slack_ts);
+
+        for (const tMessage of tMessages) {
+          threadBlock = { type: 'section', fields: [] };
+          threadBlock.fields.push({
+            type: 'mrkdwn',
+            text: `> _${tMessage.gpl_name}_`,
+          });
+          threadBlock.fields.push({
+            type: 'mrkdwn',
+            text: `_${tMessage.gpm_blocks}_`,
+          });
+          summary.push(threadBlock);
+        }
+      }
+    }
+    while (summary.length) {
+      const subSummary = summary.splice(0, 25);
+      say({
+        blocks: subSummary,
+      });
+    }
+  } catch (error) {
+    await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDSUMMARIZE')}: ${error}`);
   }
 }

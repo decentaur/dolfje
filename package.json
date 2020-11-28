@@ -26,7 +26,7 @@
   "dependencies": {
     "@slack/bolt": "1.6.0",
     "@slack/client": "5.0.2",
-    "@slack/events-api": "2.3.1",
+    "@slack/events-api": "^2.3.3",
     "@slack/interactive-messages": "1.4.1",
     "dotenv": "8.2.0",
     "localizify": "^2.0.0",
