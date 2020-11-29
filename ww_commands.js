@@ -45,7 +45,6 @@ async function channelList({ command, ack, say }) {
   ack();
   try {
     const game = await queries.getActiveGameWithChannel(command.channel_id);
-    const channelPlayersList = [];
     const channelUsersList = await helpers.getUserlist(client, command.channel_id);
     const playerList = await queries.getPlayerList(game.gms_id);
     const inputList = channelUsersList.filter((x) => playerList.map((y) => y.gpl_slack_id).includes(x.id));
@@ -158,8 +157,8 @@ async function status({ command, ack, say }) {
 async function regels({ command, ack, say }) {
   ack();
   try {
-    game = await queries.getActiveGameWithChannel(command.channel_id);
-    let regels = await queries.getRules(game.gms_id);
+    const game = await queries.getActiveGameWithChannel(command.channel_id);
+    const regels = await queries.getRules(game.gms_id);
     if (!regels) {
       regels = {
         gru_name: `${t('TEXTNORULES')}`,
@@ -1254,7 +1253,7 @@ async function summarize({ command, ack, say }) {
 
   try {
     // Only a moderator can give this command
-    const game = await queries.getActiveGameWithChannel(command.channel_id);
+    const game = await queries.getGameWithChannel(command.channel_id);
     if (!(await queries.isVerteller(game.gms_id, command.user_id))) {
       const warning = `${t('TEXTONLYMODERATORSUMMARIZE')}`;
       await helpers.sendIM(client, command.user_id, warning);
