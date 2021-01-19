@@ -48,7 +48,7 @@ Draai met NodeJS index.js (ik gebruik hiervoor de pm2 proces manager)
 ## Handleidng
 
 De gebruikershandleiding kan je hier vinden:
-https://metnerdsomtafel.nl/wwwiki/index.php/Dolfje
+https://metnerdsomtafel.nl/wiki/index.php/Dolfje
 
 ## Credit
 
