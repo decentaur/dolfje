@@ -10,6 +10,7 @@ const channelType = {
   vote: 'VOTE',
   viewer: 'VIEWER',
   standard: 'NORMAL',
+  stemstand: 'VOTEFLOW',
 };
 
 function addCommands(app) {
@@ -358,6 +359,12 @@ async function stemStand({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
+    // tijdelijk uitschakelen stemstand
+    // if (!(await queries.isVerteller(game.gms_id, command.user_id))) {
+    //   const warning = `sorry sectators op verzoek van de vertellers staat wwstemstand uit`;
+    //   await helpers.sendIM(client, command.user_id, warning);
+    //   return;
+    // }
     const prelimResult = await queries.getCurrentPollResults(game.gms_id);
     if (!prelimResult.length) {
       return await helpers.sendIM(client, command.user_id, `${t('TEXTNOVOTES')}`);
@@ -435,7 +442,6 @@ async function startRegistratie({ command, ack, say }) {
   ack();
   try {
     params = command.text.trim().split(' ');
-    const activeGames = await queries.getActiveGameName();
     if (params.length !== 3) {
       const warning = `${t('TEXTTHREEPARAMETERSNEEDED')} ${t('COMMANDSTARTREGISTRATION')} [${t('TEXTPASSWORD')}] [${t(
         'TEXTVOTESTYLE'
@@ -460,8 +466,7 @@ async function startRegistratie({ command, ack, say }) {
     if (result.succes) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
-        channel: process.env.REG_CHANNEL,
-        user: command.user_id,
+        channel: process.env.REG_CHANNEL || command.channel_id,
         blocks: [
           {
             type: 'section',
@@ -528,6 +533,12 @@ async function startSpel({ command, ack, say }) {
       is_private: true,
     });
 
+    const stemstand = await client.conversations.create({
+      token: process.env.SLACK_BOT_TOKEN,
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTVOTEFLOW')}`,
+      is_private: true,
+    });
+
     const result = await queries.startGame(game.gms_id, params[1]);
     if (result.succes) {
       await client.conversations.invite({
@@ -556,6 +567,14 @@ async function startSpel({ command, ack, say }) {
         gch_user_created: command.user_id,
       };
       await queries.logChannel(stemhokInput);
+      const stemstandInput = {
+        gch_gms_id: game.gms_id,
+        gch_slack_id: stemstand.channel.id,
+        gch_name: stemstand.channel.name,
+        gch_type: channelType.stemstand,
+        gch_user_created: command.user_id,
+      };
+      await queries.logChannel(stemstandInput);
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: hoofdkanaal.channel.id,
@@ -565,6 +584,11 @@ async function startSpel({ command, ack, say }) {
         token: process.env.SLACK_BOT_TOKEN,
         channel: stemhok.channel.id,
         users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
+      });
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: stemstand.channel.id,
+        users: result.vertellerList.map((x) => x.gpl_slack_id).join(','),
       });
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
@@ -585,7 +609,6 @@ async function startSpel({ command, ack, say }) {
       for (const speler of uitgeloteSpelers) {
         await helpers.sendIM(client, speler.gpl_slack_id, uitgeloot);
       }
-      const activePlayerList = [];
       let returnText = [];
       const usersList = await helpers.getUserlist(client, hoofdkanaal.channel.id);
       for (i = 0; i < result.playerList.length; i++) {
@@ -595,7 +618,6 @@ async function startSpel({ command, ack, say }) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: hoofdkanaal.channel.id,
-        user: command.user_id,
         blocks: [
           {
             type: 'section',
@@ -640,7 +662,48 @@ async function stopSpel({ command, ack, say }) {
     const result = await queries.stopGame(game.gms_id);
     if (result.succes) {
       const allChannels = await queries.getAllChannels(game.gms_id);
-      helpers.inviteEveryone(client, command, game, queries, t, allChannels);
+      const channelId = await queries.getChannel(game.gms_id, channelType.vote);
+      const chuckedChannels = [];
+      while (allChannels.length) {
+        chuckedChannels.push(allChannels.splice(0, 5));
+      }
+
+      let buttonblocks = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${t('TEXTCLICKSELFINVITECHANNELS')}`,
+          },
+        },
+      ];
+      for (const channelChunk of chuckedChannels)
+        buttonblocks = buttonblocks.concat([
+          {
+            type: 'actions',
+            elements: channelChunk.map((x) => ({
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: x.gch_name,
+              },
+              value: x.gch_slack_id,
+              action_id: `selfinvite-${x.gch_slack_id}`,
+            })),
+          },
+        ]);
+      await client.chat.postMessage({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: channelId,
+        blocks: buttonblocks,
+      });
+
+      await client.chat.postMessage({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: process.env.REG_CHANNEL || command.channel_id,
+        text: `${game.gms_name} ${t('TEXTGAMECLOSED')}`,
+      });
+
       await helpers.sendIM(client, command.user_id, `${game.gms_name} ${t('TEXTGAMECLOSED')}`);
     } else {
       await helpers.sendIM(client, command.user_id, result.error);
@@ -705,7 +768,6 @@ async function createChannel({ command, ack, say }) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: im.channel.id,
-        user: command.user_id,
         blocks: buttonblocks,
       });
     } else {
@@ -779,11 +841,6 @@ async function reanimeer({ command, ack, say }) {
     await queries.reanimateUser(game.gms_id, userId);
     const message = `${t('TEXTRERISE')}`;
     await helpers.sendIM(client, userId, message);
-    await client.conversations.kick({
-      token: process.env.SLACK_BOT_TOKEN,
-      channel: channelId,
-      user: userId,
-    });
     await helpers.sendIM(client, command.user_id, `${params[0]} is ${t('TEXTALIVE')}`);
   } catch (error) {
     await helpers.sendIM(client, command.user_id, `${t('TEXTCOMMANDERROR')} ${t('COMMANDREVIVE')}: ${error}`);
@@ -810,7 +867,7 @@ async function extraVerteller({ command, ack, say }) {
       await actions.vertellerToevoegenFunction(
         vertellerId,
         command.user_id,
-        process.env.REG_CHANNEL,
+        process.env.REG_CHANNEL || command.channel_id,
         games[0].gms_id,
         0,
         0,
@@ -859,7 +916,6 @@ async function extraVerteller({ command, ack, say }) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: im.channel.id,
-        user: command.user_id,
         blocks: buttonblocks,
       });
     } else {
@@ -975,7 +1031,6 @@ async function ikDoeMee({ command, ack, say }) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: im.channel.id,
-        user: command.user_id,
         blocks: buttonblocks,
       });
     } else {
@@ -1035,7 +1090,6 @@ async function ikKijkMee({ command, ack, say }) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: im.channel.id,
-        user: command.user_id,
         blocks: buttonblocks,
       });
     } else {
@@ -1099,7 +1153,6 @@ async function ikDoeNietMeerMee({ command, ack, say }) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: im.channel.id,
-        user: command.user_id,
         blocks: buttonblocks,
       });
     } else {
@@ -1254,11 +1307,11 @@ async function summarize({ command, ack, say }) {
   try {
     // Only a moderator can give this command
     const game = await queries.getGameWithChannel(command.channel_id);
-    if (!(await queries.isVerteller(game.gms_id, command.user_id))) {
-      const warning = `${t('TEXTONLYMODERATORSUMMARIZE')}`;
-      await helpers.sendIM(client, command.user_id, warning);
-      return;
-    }
+    // if (!(await queries.isVerteller(game.gms_id, command.user_id))) {
+    //   const warning = `${t('TEXTONLYMODERATORSUMMARIZE')}`;
+    //   await helpers.sendIM(client, command.user_id, warning);
+    //   return;
+    // }
     const params = command.text.trim().split(' ');
     const regex = /202[0-9]-[0-1][0-9]-[0-3][0-9]/m;
     if (regex.exec(params[0]) === null) {

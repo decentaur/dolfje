@@ -1,6 +1,6 @@
 module.exports = {
   addActions,
-  archiveerClickFunction,
+  selfInviteClickFunction,
   inschrijvenFunction,
   meekijkenFunction,
   uitschrijvenFunction,
@@ -17,6 +17,7 @@ const channelType = {
   vote: 'VOTE',
   viewer: 'VIEWER',
   standard: 'NORMAL',
+  stemstand: 'VOTEFLOW',
 };
 
 let client;
@@ -25,7 +26,7 @@ function addActions(app) {
   client = app.client;
   app.action(/^stem-.*/, stemClick);
   app.action(/^vluchtig-.*/, vluchtigClick);
-  app.action(/^archiveer-.*/, archiveerClick);
+  app.action(/^selfinvite-.*/, selfInviteClick);
   app.action(/^inschrijven-.*/, inschrijven);
   app.action(/^meekijken-.*/, meekijken);
   app.action(/^uitschrijven-.*/, uitschrijven);
@@ -51,6 +52,20 @@ async function stemClick({ body, ack, say }) {
         .map((x) => x.name)
         .join()}`,
       user: body.user.id,
+    });
+    const channelId = await queries.getChannel(game.gms_id, channelType.stemstand);
+    client.chat.postMessage({
+      token: process.env.SLACK_BOT_TOKEN,
+      channel: channelId,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `<@${body.user.id}> heeft gestemd op: <@${body.actions[0].value}>`,
+          },
+        },
+      ],
     });
   } catch (error) {
     await helpers.sendIM(client, body.user.id, `Er ging iets mis met het stemmen: ${error}`);
@@ -170,66 +185,22 @@ async function vluchtigClick({ body, ack, say }) {
   }
 }
 
-async function archiveerClick({ body, ack, say }) {
+async function selfInviteClick({ body, ack, say }) {
   ack();
   const channelId = body.actions[0].value;
-  const msgChannelId = body.container.channel_id;
-  const mgsTs = body.container.message_ts;
   const userId = body.user.id;
-  await archiveerClickFunction(channelId, msgChannelId, msgTs);
+  await selfInviteClickFunction(channelId, userId);
 }
 
-async function archiveerClickFunction(channelId, msgChannelId, msgTs, userId) {
+async function selfInviteClickFunction(channelId, userId) {
   try {
-    //await client.conversations.invite({  //use to invite yourself to delete any channels
-    await client.conversations.archive({
+    await client.conversations.invite({
       token: process.env.SLACK_BOT_TOKEN,
       channel: channelId,
-      //users: userId,
-    });
-    const channelList = await client.conversations.list({
-      token: process.env.SLACK_BOT_TOKEN,
-      exclude_archived: true,
-      types: 'private_channel',
-    });
-    const chuckedChannels = [];
-    while (channelList.channels.length) {
-      chuckedChannels.push(channelList.channels.splice(0, 5));
-    }
-
-    let buttonblocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: 'klik op de kanalen die je wilt archiveren',
-        },
-      },
-    ];
-    for (const channelChunk of chuckedChannels)
-      buttonblocks = buttonblocks.concat([
-        {
-          type: 'actions',
-          elements: channelChunk.map((x) => ({
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: x.name,
-            },
-            value: x.id,
-            action_id: `archiveer-${x.id}`,
-          })),
-        },
-      ]);
-
-    await client.chat.update({
-      token: process.env.SLACK_BOT_TOKEN,
-      channel: msgChannelId,
-      ts: msgTs,
-      blocks: buttonblocks,
+      users: userId,
     });
   } catch (error) {
-    await helpers.sendIM(client, userId, `Er ging iets mis met het archiveren: ${error}`);
+    await helpers.sendIM(client, userId, `Er ging iets mis met het het zelf uitnodigen: ${error}`);
   }
 }
 
@@ -256,7 +227,6 @@ async function inschrijvenFunction(userId, gameId, msgChannelId, msgTs, singleGa
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
         channel: process.env.REG_CHANNEL,
-        user: userId,
         blocks: [
           {
             type: 'section',
@@ -356,7 +326,6 @@ async function meekijkenFunction(userId, gameId, msgChannelId, msgTs, singleGame
       if (game.gms_status === 'REGISTERING') {
         await client.chat.postMessage({
           token: process.env.SLACK_BOT_TOKEN,
-          user: userId,
           channel: process.env.REG_CHANNEL,
           blocks: [
             {
@@ -373,7 +342,6 @@ async function meekijkenFunction(userId, gameId, msgChannelId, msgTs, singleGame
       } else if (game.gms_status === 'STARTED') {
         await client.chat.postMessage({
           token: process.env.SLACK_BOT_TOKEN,
-          user: userId,
           channel: process.env.REG_CHANNEL,
           blocks: [
             {
@@ -409,9 +377,9 @@ async function meekijkenFunction(userId, gameId, msgChannelId, msgTs, singleGame
         });
         //send IM to vertellers
         const vertellerMessage = `${t('TEXTVIEWERJOINED')} ${userName}`;
-        const alleVertellers = await queries.getVertellers(game.gms_id);
-        for (let i = 0; i < alleVertellers.length; i++) {
-          await helpers.sendIM(client, alleVertellers[i], vertellerMessage);
+        const vertellers = await queries.getVertellers(game.gms_id);
+        for (const verteller of vertellers) {
+          await helpers.sendIM(client, verteller, vertellerMessage);
         }
       }
       const viewMessage = `${t('TEXTVIEWEDGAME')} ${t('COMMANDREMOVEYOURSELFFROMGAME')}`;
@@ -504,7 +472,6 @@ async function uitschrijvenFunction(userId, gameId, msgChannelId, msgTs, singleG
     if (result.succes) {
       await client.chat.postMessage({
         token: process.env.SLACK_BOT_TOKEN,
-        user: userId,
         channel: process.env.REG_CHANNEL,
         blocks: [
           {
@@ -622,7 +589,6 @@ async function vertellerToevoegenFunction(vertellerId, userId, mainChannel, game
     }
     await client.chat.postMessage({
       token: process.env.SLACK_BOT_TOKEN,
-      user: userId,
       channel: mainChannel,
       blocks: [
         {

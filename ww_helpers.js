@@ -92,7 +92,6 @@ async function sendIM(client, userId, message) {
     token: process.env.SLACK_BOT_TOKEN,
     channel: im.channel.id,
     text: message,
-    user: userId,
   });
 }
 

@@ -24,10 +24,10 @@
   },
   "homepage": "https://github.com/n/a#readme",
   "dependencies": {
-    "@slack/bolt": "1.6.0",
+    "@slack/bolt": "^2.7.0",
     "@slack/client": "5.0.2",
     "@slack/events-api": "^2.3.3",
-    "@slack/interactive-messages": "1.4.1",
+    "@slack/interactive-messages": "^2.0.1",
     "dotenv": "8.2.0",
     "localizify": "^2.0.0",
     "moment": "^2.24.0",

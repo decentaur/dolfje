@@ -153,8 +153,12 @@ async function herinnerStemmers({ message, say }) {
     const time = message.text.match(/.*herinner.*\[(.*)\].*/)[1];
     const playersNotVoted = await queries.getAliveNotVoted(game.gms_id);
     const stemMessage = `Je hebt nog niet gestemd, je hebt tot ${time} om te stemmen, stemmen is verplicht`;
+    const vertellers = await queries.getVertellers(game.gms_id);
     for (const player of playersNotVoted) {
       await helpers.sendIM(client, player.user_id, stemMessage);
+      for (const verteller of vertellers) {
+        await helpers.sendIM(client, verteller, `Stemherinnering verstuurd naar <@${player.user_id}>`);
+      }
     }
     say({
       blocks: [
@@ -162,7 +166,7 @@ async function herinnerStemmers({ message, say }) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `Ok <@${message.user}>, ik heb ${playersNotVoted.length} stemherinneringen verstuurd`,
+            text: `Ok <@${message.user}>, done`,
           },
         },
       ],
@@ -175,8 +179,9 @@ async function herinnerStemmers({ message, say }) {
 async function registerMessage({ message, say }) {
   try {
     const game = await queries.getGameWithChannel(message.channel);
-    if (/.*has joined the group/.test(message)) {
-      //ignore join messages
+    ingnoreSubtypes = ['channel_join', 'channel_leave', 'group_join', 'group_leave', 'bot_message', 'reminder_add'];
+    if (message.user === 'USLACKBOT' || (message.subtype && ingnoreSubtypess.includes(message.subtype))) {
+      //ignore unimportant messages
       return;
     }
     await queries.messageCountPlusPlus(message.user, game.gms_id);

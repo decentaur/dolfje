@@ -170,6 +170,12 @@ async function startGame(gameId, maxPlayers) {
       and (gpl_status = ? or gpl_leader)`,
       [gameId, playerStates.viewer]
     );
+    const [rows3] = await promisePool.query(
+      `select gpl_slack_id from game_players gpl 
+      where gpl_gms_id = ? 
+      and gpl_leader`,
+      [gameId]
+    );
     await promisePool.query(
       `DELETE gpl.* FROM game_players gpl
       JOIN games g ON g.gms_id = gpl.gpl_gms_id
@@ -185,7 +191,7 @@ async function startGame(gameId, maxPlayers) {
       AND gpl.gpl_status = ?`,
       [gameId, gameStates.registering, playerStates.alive]
     );
-    return { succes: true, playerList: rows, viewerList: rows2 };
+    return { succes: true, playerList: rows, viewerList: rows2, vertellerList: rows3 };
   } catch (err) {
     console.log(err);
     return { succes: false, error: err };
@@ -950,13 +956,14 @@ async function nonThreadedMessagesInChannelByDate(channelId, startDate, endDate)
   const [rows] = await promisePool.query(
     `SELECT gpm_slack_ts, gpl_name, gpm_blocks, gpm_files, gpm_thread_ts, gpm_created_at, gch_gms_id
       FROM game_public_messages gpm
-        LEFT JOIN game_channels gch ON gpm.gpm_gch_slack_id = gch.gch_slack_id
-          LEFT JOIN game_players gpl ON gpm.gpm_gpl_slack_id = gpl.gpl_slack_id AND gpl.gpl_gms_id = gch.gch_gms_id
+        JOIN game_channels gch ON gpm.gpm_gch_slack_id = gch.gch_slack_id
+          JOIN game_players gpl ON gpm.gpm_gpl_slack_id = gpl.gpl_slack_id AND gpl.gpl_gms_id = gch.gch_gms_id
       WHERE 
         gpm_gch_slack_id = ? AND
         gpm_thread_ts is null AND
         gpm_created_at >= ? AND
-        gpm_created_at < ?`,
+        gpm_created_at < ?
+      order by gpm_created_at`,
     [channelId, dateStart, dateEnd]
   );
   return rows;
@@ -967,11 +974,12 @@ async function threadedMessagesInChannelByTS(channelId, ts) {
   const [rows] = await promisePool.query(
     `SELECT gpm_slack_ts, gpl_name, gpm_blocks, gpm_files, gpm_thread_ts, gpm_created_at, gch_gms_id
       FROM game_public_messages gpm
-        LEFT JOIN game_channels gch ON gpm.gpm_gch_slack_id = gch.gch_slack_id
-          LEFT JOIN game_players gpl ON gpm.gpm_gpl_slack_id = gpl.gpl_slack_id AND gpl.gpl_gms_id = gch.gch_gms_id
+        JOIN game_channels gch ON gpm.gpm_gch_slack_id = gch.gch_slack_id
+          JOIN game_players gpl ON gpm.gpm_gpl_slack_id = gpl.gpl_slack_id AND gpl.gpl_gms_id = gch.gch_gms_id
       WHERE 
         gpm_gch_slack_id = ? AND
-        gpm_thread_ts = ?`,
+        gpm_thread_ts = ?
+      order by gpm_created_at`,
     [channelId, ts]
   );
   return rows;
