@@ -30,7 +30,7 @@
     "@slack/interactive-messages": "^2.0.1",
     "dotenv": "8.2.0",
     "localizify": "^2.0.0",
-    "moment": "^2.29.2",
+    "moment": "^2.29.4",
     "mysql2": "^2.1.0"
   }
 }
