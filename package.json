@@ -24,7 +24,7 @@
   },
   "homepage": "https://github.com/n/a#readme",
   "dependencies": {
-    "@slack/bolt": "^2.7.0",
+    "@slack/bolt": "^3.12.2",
     "@slack/client": "5.0.2",
     "@slack/events-api": "^2.3.3",
     "@slack/interactive-messages": "^2.0.1",
