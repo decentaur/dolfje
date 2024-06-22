@@ -12,14 +12,6 @@ let helpers = require('./ww_helpers');
 const queries = require('./ww_queries');
 const { t } = require('localizify');
 
-const channelType = {
-  main: 'MAIN',
-  vote: 'VOTE',
-  viewer: 'VIEWER',
-  standard: 'NORMAL',
-  stemstand: 'VOTEFLOW',
-};
-
 let client;
 
 function addActions(app) {
@@ -53,7 +45,7 @@ async function stemClick({ body, ack, say }) {
         .join()}`,
       user: body.user.id,
     });
-    const channelId = await queries.getChannel(game.gms_id, channelType.stemstand);
+    const channelId = await queries.getChannel(game.gms_id, helpers.channelType.stemstand);
     client.chat.postMessage({
       token: process.env.SLACK_BOT_TOKEN,
       channel: channelId,
@@ -355,24 +347,31 @@ async function meekijkenFunction(userId, gameId, msgChannelId, msgTs, singleGame
         });
 
         //invite player to main channel
-        const mainId = await queries.getChannel(game.gms_id, channelType.main);
+        const mainId = await queries.getChannel(game.gms_id, helpers.channelType.main);
         await client.conversations.invite({
           token: process.env.SLACK_BOT_TOKEN,
           channel: mainId,
           users: userId,
         });
         //invite player to stemhok
-        const voteId = await queries.getChannel(game.gms_id, channelType.vote);
+        const voteId = await queries.getChannel(game.gms_id, helpers.channelType.vote);
         await client.conversations.invite({
           token: process.env.SLACK_BOT_TOKEN,
           channel: voteId,
           users: userId,
         });
         //invite player to sectators
-        const sectatorId = await queries.getChannel(game.gms_id, channelType.viewer);
+        const sectatorId = await queries.getChannel(game.gms_id, helpers.channelType.viewer);
         await client.conversations.invite({
           token: process.env.SLACK_BOT_TOKEN,
           channel: sectatorId,
+          users: userId,
+        });
+        //invite player to kletskanaal
+        const talkChannelId = await queries.getChannel(game.gms_id, helpers.channelType.viewer);
+        await client.conversations.invite({
+          token: process.env.SLACK_BOT_TOKEN,
+          channel: talkChannelId,
           users: userId,
         });
         //send IM to vertellers
@@ -707,7 +706,7 @@ async function createNewChannelFunction(gameId, userId, newChannelName, msgChann
       gch_gms_id: gameId,
       gch_slack_id: kanaal.channel.id,
       gch_name: kanaal.channel.name,
-      gch_type: channelType.standard,
+      gch_type: helpers.channelType.standard,
       gch_user_created: userId,
     };
     await queries.logChannel(kanaalInput);

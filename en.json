@@ -114,6 +114,7 @@
   "TEXTSPECTATORS": "spectators",
   "TEXTTALKCHANNEL": "talkchannel",
   "TEXTSPOILERCHANNEL": "spoilerchannel",
+  "TEXTWOLFCHANNEL": "wolves",
   "TEXTNOTINGAME": "Sorry, you won't be able to join as there where too many players.",
   "TEXTGAMESTARTEDREGISTRATION": "will be started. You will not be able to join anymore. These are the selected players:\n",
   "TEXTMODERATORSTOPGAME": "Only a moderator can stop the game",

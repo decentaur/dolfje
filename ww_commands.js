@@ -5,14 +5,6 @@ const { t } = require('localizify');
 module.exports = { addCommands };
 let client;
 
-const channelType = {
-  main: 'MAIN',
-  vote: 'VOTE',
-  viewer: 'VIEWER',
-  standard: 'NORMAL',
-  stemstand: 'VOTEFLOW',
-};
-
 function addCommands(app) {
   client = app.client;
   app.command(t('COMMANDLIST'), channelList);
@@ -224,7 +216,7 @@ async function startStemRonde({ command, ack, say }) {
       await helpers.sendIM(client, command.user_id, warning);
       return;
     }
-    const channelId = await queries.getChannel(game.gms_id, channelType.vote);
+    const channelId = await queries.getChannel(game.gms_id, helpers.channelType.vote);
     const channelUsersList = await helpers.getUserlist(client, channelId);
     await queries.startPoll(game.gms_id, command.text.trim() || ' ');
     const playersAlive = await queries.getAlive(game.gms_id);
@@ -521,7 +513,7 @@ async function startSpel({ command, ack, say }) {
       is_private: true,
     });
 
-    const hiernamaals = await client.conversations.create({
+    const sectators = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
       name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTSPECTATORS')}`,
       is_private: true,
@@ -539,7 +531,13 @@ async function startSpel({ command, ack, say }) {
       is_private: true,
     });
 
-    const kletskanaal = await client.conversations.create({
+    const wolvenkanaal = await client.conversations.create({
+      token: process.env.SLACK_BOT_TOKEN,
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTWOLFCHANNEL')}`,
+      is_private: true,
+    });
+
+    const talkChannel = await client.conversations.create({
       token: process.env.SLACK_BOT_TOKEN,
       name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTTALKCHANNEL')}`,
       is_private: true,
@@ -563,7 +561,7 @@ async function startSpel({ command, ack, say }) {
         gch_gms_id: game.gms_id,
         gch_slack_id: hoofdkanaal.channel.id,
         gch_name: hoofdkanaal.channel.name,
-        gch_type: channelType.main,
+        gch_type: helpers.channelType.main,
         gch_user_created: command.user_id,
       };
       await queries.logChannel(hoofdkanaalInput);
@@ -576,7 +574,7 @@ async function startSpel({ command, ack, say }) {
         gch_gms_id: game.gms_id,
         gch_slack_id: stemhok.channel.id,
         gch_name: stemhok.channel.name,
-        gch_type: channelType.vote,
+        gch_type: helpers.channelType.vote,
         gch_user_created: command.user_id,
       };
       await queries.logChannel(stemhokInput);
@@ -584,7 +582,7 @@ async function startSpel({ command, ack, say }) {
         gch_gms_id: game.gms_id,
         gch_slack_id: stemstand.channel.id,
         gch_name: stemstand.channel.name,
-        gch_type: channelType.stemstand,
+        gch_type: helpers.channelType.stemstand,
         gch_user_created: command.user_id,
       };
       await queries.logChannel(stemstandInput);
@@ -605,27 +603,54 @@ async function startSpel({ command, ack, say }) {
       });
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
-        channel: hiernamaals.channel.id,
+        channel: sectators.channel.id,
         users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
       });
+
+      // Invite everyone to the talking channel
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
-        channel: kletskanaal.channel.id,
-        users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
+        channel: talkChannel.channel.id,
+        users: result.playerList.map((x) => x.gpl_slack_id).join(','),
       });
+      const talkChannelInput = {
+        gch_gms_id: game.gms_id,
+        gch_slack_id: talkChannel.channel.id,
+        gch_name: talkChannel.channel.name,
+        gch_type: helpers.channelType.talking,
+        gch_user_created: command.user_id,
+      };
+      await queries.logChannel(talkChannelInput);
+
+      // Only invite the narrators to the spoiler channel
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
         channel: spoilerkanaal.channel.id,
         users: result.vertellerList.map((x) => x.gpl_slack_id).join(','),
       });
-      const hiernamaalsInput = {
+      const spoilerChannelInput = {
         gch_gms_id: game.gms_id,
-        gch_slack_id: hiernamaals.channel.id,
-        gch_name: hiernamaals.channel.name,
-        gch_type: channelType.viewer,
+        gch_slack_id: spoilerkanaal.channel.id,
+        gch_name: spoilerkanaal.channel.name,
+        gch_type: helpers.channelType.spoilers,
         gch_user_created: command.user_id,
       };
-      await queries.logChannel(hiernamaalsInput);
+      await queries.logChannel(spoilerChannelInput);
+
+      // Invite the narrators to the wolf channel, inviting the wolves still happens manually
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: wolvenkanaal.channel.id,
+        users: result.vertellerList.map((x) => x.gpl_slack_id).join(','),
+      });
+      const sectatorInput = {
+        gch_gms_id: game.gms_id,
+        gch_slack_id: wolvenkanaal.channel.id,
+        gch_name: wolvenkanaal.channel.name,
+        gch_type: helpers.channelType.sectator,
+        gch_user_created: command.user_id,
+      };
+      await queries.logChannel(sectatorInput);
 
       const uitgeloot = `${t('TEXTNOTINGAME')}`;
       const uitgeloteSpelers = await queries.getNotDrawnPlayers(game.gms_id);
@@ -685,7 +710,7 @@ async function stopSpel({ command, ack, say }) {
     const result = await queries.stopGame(game.gms_id);
     if (result.succes) {
       const allChannels = await queries.getAllChannels(game.gms_id);
-      const channelId = await queries.getChannel(game.gms_id, channelType.vote);
+      const channelId = await queries.getChannel(game.gms_id, helpers.channelType.vote);
       const chuckedChannels = [];
       while (allChannels.length) {
         chuckedChannels.push(allChannels.splice(0, 5));
@@ -823,7 +848,7 @@ async function dood({ command, ack, say }) {
     }
 
     const userId = params[0].match(/^<@([A-Z0-9]*)(\|.*)?>/)[1];
-    const channelId = await queries.getChannel(game.gms_id, channelType.viewer);
+    const channelId = await queries.getChannel(game.gms_id, helpers.channelType.sectator);
     await queries.killUser(game.gms_id, userId);
     const message = `${t('TEXTYOUDIED')} ${t('TEXTDEAD')}? ${t('TEXTINVITEDAFTERLIFE')}`;
     await helpers.sendIM(client, userId, message);
@@ -860,7 +885,7 @@ async function reanimeer({ command, ack, say }) {
     }
 
     const userId = params[0].match(/^<@([A-Z0-9]*)(\|.*)?>/)[1];
-    const channelId = await queries.getChannel(game.gms_id, channelType.viewer);
+    const channelId = await queries.getChannel(game.gms_id, helpers.channelType.sectator);
     await queries.reanimateUser(game.gms_id, userId);
     const message = `${t('TEXTRERISE')}`;
     await helpers.sendIM(client, userId, message);
@@ -968,7 +993,7 @@ async function nodigVertellersUit({ command, ack, say }) {
         gch_gms_id: game[0].gms_id,
         gch_slack_id: command.channel_id,
         gch_name: command.channel_name,
-        gch_type: channelType.standard,
+        gch_type: helpers.channelType.standard,
         gch_user_created: command.user_id,
       };
       await queries.logChannel(kanaalInput);
