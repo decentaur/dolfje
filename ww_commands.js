@@ -539,7 +539,20 @@ async function startSpel({ command, ack, say }) {
       is_private: true,
     });
 
+    const kletskanaal = await client.conversations.create({
+      token: process.env.SLACK_BOT_TOKEN,
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTTALKCHANNEL')}`,
+      is_private: true,
+    });
+
+    const spoilerkanaal = await client.conversations.create({
+      token: process.env.SLACK_BOT_TOKEN,
+      name: `${game.gms_name.toLowerCase().split(' ').join('_')}_${t('TEXTSPOILERCHANNEL')}`,
+      is_private: true,
+    });
+
     const result = await queries.startGame(game.gms_id, params[1]);
+
     if (result.succes) {
       await client.conversations.invite({
         token: process.env.SLACK_BOT_TOKEN,
@@ -594,6 +607,16 @@ async function startSpel({ command, ack, say }) {
         token: process.env.SLACK_BOT_TOKEN,
         channel: hiernamaals.channel.id,
         users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
+      });
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: kletskanaal.channel.id,
+        users: result.viewerList.map((x) => x.gpl_slack_id).join(','),
+      });
+      await client.conversations.invite({
+        token: process.env.SLACK_BOT_TOKEN,
+        channel: spoilerkanaal.channel.id,
+        users: result.vertellerList.map((x) => x.gpl_slack_id).join(','),
       });
       const hiernamaalsInput = {
         gch_gms_id: game.gms_id,
