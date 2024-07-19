@@ -6,7 +6,18 @@ module.exports = {
   postDelayed,
   addSlackName,
   inviteEveryone,
+  channelType
 };
+
+const channelType = {
+  main: 'MAIN',
+  vote: 'VOTE',
+  sectator: 'SECTATOR',
+  standard: 'NORMAL',
+  stemstand: 'VOTEFLOW',
+  talking: 'TALKING',
+  spoilers: 'SPOILERS'
+}
 
 async function getUserlist(client, channelId) {
   const channelUsersList = [];
